@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "timezone": "Asia/Shanghai",
+  "window": {"end_time": "06:00", "duration_hours": 24},
+  "regions": ["china"],
+  "selection": {
+    "minimum": 5,
+    "maximum": 8,
+    "minimum_categories": 4,
+    "maximum_per_category": 2,
+    "minimum_score": 45,
+    "official_source_required": ["politics", "public-safety"]
+  },
+  "themes": ["news-blue", "teal", "warm-orange", "elegant-purple", "deep-cyan", "gold-blue", "slate-blue"],
+  "source_tiers": {
+    "1": ["中国政府网", "国务院", "外交部", "应急管理部", "国家统计局", "官方"],
+    "2": ["新华社", "新华网", "人民网", "央视新闻", "中国新闻网"],
+    "3": ["澎湃新闻", "第一财经", "每日经济新闻", "新浪财经", "36氪", "IT之家"]
+  },
+  "sources": [
+    {"name": "人民网", "url": "http://www.people.com.cn/rss/politics.xml", "category": "politics", "region": "china", "enabled": true},
+    {"name": "中国新闻网", "url": "https://www.chinanews.com/rss/scroll-news.xml", "category": "society", "region": "china", "enabled": true},
+    {"name": "澎湃新闻", "url": "https://www.thepaper.cn/rss_newslist_all.xml", "category": "society", "region": "china", "enabled": true},
+    {"name": "36氪", "url": "https://36kr.com/feed", "category": "tech", "region": "china", "enabled": true},
+    {"name": "IT之家", "url": "https://www.ithome.com/rss/", "category": "tech", "region": "china", "enabled": true},
+    {"name": "BBC World", "url": "https://feeds.bbci.co.uk/news/world/rss.xml", "category": "world", "region": "international", "enabled": true}
+  ]
+}
