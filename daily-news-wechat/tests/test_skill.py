@@ -9,8 +9,8 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-SKILL = ROOT / "daily-news-wechat"
+SKILL = Path(__file__).resolve().parents[1]
+ROOT = SKILL.parent
 SCRIPTS = SKILL / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
@@ -46,7 +46,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(len(review), 1)
 
     def test_deduplicate_and_diverse_select(self):
-        payload = json.loads((ROOT / "tests" / "fixtures" / "raw-news.json").read_text(encoding="utf-8"))
+        payload = json.loads((SKILL / "tests" / "fixtures" / "raw-news.json").read_text(encoding="utf-8"))
         rows = [core.normalize(row, self.run_at, self.config) for row in payload["items"]]
         merged = core.deduplicate(rows)
         self.assertLess(len(merged), len(rows))
@@ -86,7 +86,7 @@ class EndToEndTests(unittest.TestCase):
             command = [
                 sys.executable, str(SCRIPTS / "run.py"), "build",
                 "--output-root", temp,
-                "--input", str(ROOT / "tests" / "fixtures" / "raw-news.json"),
+                "--input", str(SKILL / "tests" / "fixtures" / "raw-news.json"),
                 "--run-at", "2026-07-19T06:20:00+08:00",
             ]
             subprocess.run(command, check=True, capture_output=True, text=True)
@@ -109,6 +109,17 @@ class StructureTests(unittest.TestCase):
         self.assertNotIn("TODO", text)
         self.assertNotIn("[TODO", text)
         self.assertLess(len(text.splitlines()), 500)
+
+    def test_chinese_documentation_and_previews(self):
+        repository_readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        skill_readme = (SKILL / "README.md").read_text(encoding="utf-8")
+        skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("pink-mimi Skills 工具库", repository_readme)
+        self.assertIn("效果预览", skill_readme)
+        self.assertTrue((ROOT / "assets" / "pink-mimi-skills-banner.svg").exists())
+        self.assertTrue((SKILL / "assets" / "preview.svg").exists())
+        self.assertIn("## 工作流程", skill_text)
+        self.assertRegex(skill_text, r"(?s)^---\nname: daily-news-wechat\n")
 
 
 if __name__ == "__main__":

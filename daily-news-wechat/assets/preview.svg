@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">daily-news-wechat 输出效果预览</title>
+  <desc id="desc">新闻公众号文章、事件卡片、来源和双封面的界面示意</desc>
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#eef5ff"/><stop offset="1" stop-color="#f8fbff"/></linearGradient>
+    <filter id="s" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#163b70" flood-opacity=".14"/></filter>
+  </defs>
+  <rect width="1200" height="675" rx="28" fill="#e9eef6"/>
+  <text x="54" y="55" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="700" fill="#1d5fd1" letter-spacing="3">DAILY NEWS · WECHAT</text>
+  <text x="54" y="96" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="34" font-weight="800" fill="#102a4a">从新闻采集到公众号审核包</text>
+  <g transform="translate(54 130)" filter="url(#s)">
+    <rect width="735" height="492" rx="22" fill="#fff"/>
+    <rect width="735" height="92" rx="22" fill="url(#page)"/>
+    <rect y="70" width="735" height="22" fill="url(#page)"/>
+    <text x="30" y="35" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" font-weight="700" fill="#2870da">昨日国内大事</text>
+    <text x="30" y="68" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="25" font-weight="800" fill="#102a4a">昨天，这 5 件大事值得关注</text>
+    <text x="30" y="125" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="15" font-weight="700" fill="#102a4a">30 秒速览</text>
+    <g font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" fill="#4f6480">
+      <circle cx="42" cy="153" r="4" fill="#2c70d7"/><text x="57" y="158">重要政策与公共服务信息正式公布</text>
+      <circle cx="42" cy="181" r="4" fill="#2c70d7"/><text x="57" y="186">重点行业发布最新进展与风险提示</text>
+      <circle cx="42" cy="209" r="4" fill="#2c70d7"/><text x="57" y="214">天气与交通动态需要持续关注</text>
+    </g>
+    <g transform="translate(30 238)">
+      <rect width="675" height="88" rx="14" fill="#f2f7ff"/><rect width="8" height="88" rx="4" fill="#2a6fd5"/>
+      <circle cx="42" cy="44" r="22" fill="#2a6fd5"/><text x="42" y="50" text-anchor="middle" font-family="Arial" font-size="16" font-weight="700" fill="#fff">01</text>
+      <text x="78" y="34" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="17" font-weight="800" fill="#102a4a">发生了什么：权威来源公布最新信息</text>
+      <text x="78" y="62" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" fill="#58708e">为什么重要 · 普通人需要注意什么 · 小清提醒</text>
+    </g>
+    <g transform="translate(30 340)">
+      <rect width="675" height="64" rx="14" fill="#fff7f2"/><text x="20" y="27" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="14" font-weight="700" fill="#9c5223">今天值得关注</text><text x="20" y="49" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="12" fill="#7a6455">后续口径、天气变化与公共服务安排</text>
+    </g>
+    <g transform="translate(30 423)">
+      <text x="0" y="18" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="14" font-weight="700" fill="#102a4a">信息来源</text>
+      <text x="0" y="46" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="12" fill="#6a778a">1. 来源机构 · </text><text x="87" y="46" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="12" fill="#2469d3">可点击新闻标题</text>
+    </g>
+  </g>
+  <g transform="translate(830 130)" filter="url(#s)">
+    <rect width="316" height="202" rx="22" fill="#fff"/>
+    <rect x="18" y="18" width="280" height="117" rx="14" fill="#eaf3ff"/>
+    <rect x="206" y="18" width="92" height="117" rx="0 14 14 0" fill="#2458d7"/>
+    <text x="36" y="55" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="12" font-weight="700" fill="#2c69ca">横版主封面</text>
+    <text x="36" y="89" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="20" font-weight="800" fill="#102a4a">昨日 5 件大事</text>
+    <text x="158" y="169" text-anchor="middle" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" fill="#596a82">900 × 383 · 独立上传</text>
+  </g>
+  <g transform="translate(830 360)" filter="url(#s)">
+    <rect width="316" height="262" rx="22" fill="#fff"/>
+    <rect x="18" y="18" width="170" height="170" rx="16" fill="#2458d7"/>
+    <text x="103" y="84" text-anchor="middle" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" font-weight="700" fill="#cfe0ff">昨日</text>
+    <text x="103" y="119" text-anchor="middle" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="28" font-weight="800" fill="#fff">5 件大事</text>
+    <text x="208" y="66" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" font-weight="700" fill="#102a4a">方形封面</text>
+    <text x="208" y="93" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="12" fill="#69788c">单独导出</text>
+    <text x="208" y="117" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="12" fill="#69788c">避免裁剪</text>
+    <rect x="18" y="210" width="280" height="34" rx="17" fill="#edf3fb"/>
+    <text x="158" y="232" text-anchor="middle" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="12" fill="#536782">审核通过后再发布</text>
+  </g>
+</svg>
