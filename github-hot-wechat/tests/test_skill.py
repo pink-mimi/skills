@@ -123,6 +123,13 @@ class StructureTests(unittest.TestCase):
         self.assertIn("codex-primary-runtime", launcher)
         self.assertIn("run.py", launcher)
 
+    def test_readme_shows_real_article_and_cover_previews(self):
+        readme = (SKILL / "README.md").read_text(encoding="utf-8")
+        for name in ("preview-cover.png", "preview-article.png"):
+            self.assertTrue((SKILL / "assets" / name).exists(), name)
+            self.assertIn(f"assets/{name}", readme)
+        self.assertLess(readme.index("assets/preview-cover.png"), readme.index("assets/preview.svg"))
+
 
 if __name__ == "__main__":
     unittest.main()
