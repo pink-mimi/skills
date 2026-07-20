@@ -5,13 +5,20 @@
   "collection": {"timeout_seconds": 10, "max_workers": 6, "minimum_successful_sources": 3},
   "selection": {"minimum": 5, "maximum": 8, "minimum_categories": 4, "maximum_per_category": 2},
   "sources": [
-    {"name": "人民网·时政", "url": "http://www.people.com.cn/rss/politics.xml", "category": "politics", "enabled": true},
-    {"name": "人民网·财经", "url": "http://www.people.com.cn/rss/finance.xml", "category": "finance", "enabled": true},
-    {"name": "人民网·社会", "url": "http://www.people.com.cn/rss/society.xml", "category": "society", "enabled": true},
-    {"name": "人民网·国际", "url": "http://www.people.com.cn/rss/world.xml", "category": "world", "enabled": true},
-    {"name": "人民网·科技", "url": "http://www.people.com.cn/rss/it.xml", "category": "tech", "enabled": true},
-    {"name": "中国新闻网·滚动", "url": "https://www.chinanews.com/rss/scroll-news.xml", "category": "general", "enabled": true},
-    {"name": "中国新闻网·国内", "url": "https://www.chinanews.com.cn/rss/china.xml", "category": "society", "enabled": true},
-    {"name": "IT之家", "url": "https://www.ithome.com/rss/", "category": "tech", "enabled": true}
+    {"name": "人民网·时政", "url": "http://www.people.com.cn/rss/politics.xml", "type": "rss", "category": "politics", "daily_default": true, "enabled": true},
+    {"name": "人民网·财经", "url": "http://www.people.com.cn/rss/finance.xml", "type": "rss", "category": "finance", "daily_default": true, "enabled": true},
+    {"name": "人民网·社会", "url": "http://www.people.com.cn/rss/society.xml", "type": "rss", "category": "society", "daily_default": true, "enabled": true},
+    {"name": "人民网·国际", "url": "http://www.people.com.cn/rss/world.xml", "type": "rss", "category": "world", "daily_default": true, "enabled": true},
+    {"name": "人民网·科技", "url": "http://www.people.com.cn/rss/it.xml", "type": "rss", "category": "tech", "daily_default": true, "enabled": true},
+    {"name": "中国新闻网·滚动", "url": "https://www.chinanews.com/rss/scroll-news.xml", "type": "rss", "category": "general", "daily_default": true, "enabled": true},
+    {"name": "中国新闻网·国内", "url": "https://www.chinanews.com.cn/rss/china.xml", "type": "rss", "category": "society", "daily_default": true, "enabled": true},
+    {"name": "IT之家", "url": "https://www.ithome.com/rss/", "type": "rss", "category": "tech", "daily_default": true, "enabled": true},
+    {"name": "新浪体育", "url": "https://sports.sina.com.cn/", "type": "web", "category": "sports", "daily_default": false, "enabled": true},
+    {"name": "新浪娱乐", "url": "https://ent.sina.com.cn/", "type": "web", "category": "entertainment", "daily_default": false, "enabled": true},
+    {"name": "MIT Technology Review", "url": "https://www.technologyreview.com/feed/", "type": "rss", "category": "ai", "daily_default": false, "enabled": true},
+    {"name": "Google AI Blog", "url": "https://blog.google/technology/ai/rss/", "type": "rss", "category": "ai", "daily_default": false, "enabled": true},
+    {"name": "Google DeepMind", "url": "https://deepmind.google/blog/rss.xml", "type": "rss", "category": "ai", "daily_default": false, "enabled": true},
+    {"name": "Hacker News", "url": "https://hnrss.org/frontpage", "type": "rss", "category": "ai-community", "daily_default": false, "enabled": true},
+    {"name": "Product Hunt", "url": "https://www.producthunt.com/feed", "type": "rss", "category": "ai-community", "daily_default": false, "enabled": true}
   ]
 }

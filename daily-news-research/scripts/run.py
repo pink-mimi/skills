@@ -14,6 +14,9 @@ def load(path): return json.loads(Path(path).read_text(encoding="utf-8"))
 def save(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
+def write(path,value):
+    path.parent.mkdir(parents=True,exist_ok=True)
+    path.write_text(value.rstrip()+"\n",encoding="utf-8")
 def window(run_at, config):
     hour, minute = map(int, config["window"]["end_time"].split(":"))
     end = run_at.astimezone(BJT).replace(hour=hour, minute=minute, second=0, microsecond=0)
@@ -38,12 +41,21 @@ def parse_feed(payload,source):
         title=clean(node.findtext(f"{atom}title") or ""); link=node.find(f"{atom}link"); url=link.get("href","") if link is not None else ""
         if title and url: rows.append({"title":title,"url":url,"source":source["name"],"category":source.get("category","general"),"summary":clean(node.findtext(f"{atom}summary") or node.findtext(f"{atom}content") or ""),"published_at":node.findtext(f"{atom}published") or node.findtext(f"{atom}updated")})
     return rows
-def collect(config,run_at,opener=urllib.request.urlopen):
-    sources=[x for x in config.get("sources",[]) if x.get("enabled",True)]; settings=config.get("collection",{}); timeout=int(settings.get("timeout_seconds",10)); workers=max(1,min(int(settings.get("max_workers",6)),len(sources) or 1))
+def parse_web(payload,source):
+    text=payload.decode("utf-8","replace"); rows=[]; seen=set()
+    for url,label in re.findall(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>([\s\S]*?)</a>',text,re.I):
+        title=clean(label)
+        if len(title)<8 or title in seen or not url.startswith("http"): continue
+        seen.add(title); rows.append({"title":title,"url":url,"source":source["name"],"category":source["category"],"summary":"","published_at":""})
+        if len(rows)>=50: break
+    return rows
+def collect(config,run_at,opener=urllib.request.urlopen,categories=None):
+    sources=[x for x in config.get("sources",[]) if x.get("enabled",True) and ((x.get("category") in categories) if categories else x.get("daily_default",True))]; settings=config.get("collection",{}); timeout=int(settings.get("timeout_seconds",10)); workers=max(1,min(int(settings.get("max_workers",6)),len(sources) or 1))
     def fetch(index,source):
         try:
             request=urllib.request.Request(source["url"],headers={"User-Agent":"daily-news-research/1.1 (+https://github.com/pink-mimi/skills)"})
-            with opener(request,timeout=timeout) as response: rows=parse_feed(response.read(),source)
+            with opener(request,timeout=timeout) as response:
+                payload=response.read(); rows=parse_web(payload,source) if source.get("type","rss")=="web" else parse_feed(payload,source)
             return index,rows,None
         except Exception as exc: return index,[],{"source":source.get("name"),"url":source.get("url"),"error":f"{type(exc).__name__}: {exc}"}
     results=[]
@@ -56,6 +68,30 @@ def collect(config,run_at,opener=urllib.request.urlopen):
         if error: errors.append(error)
         else: successful+=1
     return {"fetched_at":run_at.isoformat(),"meta":{"configured_sources":len(sources),"successful_sources":successful,"failed_sources":len(errors)},"items":items,"errors":errors}
+def query_items(items,category="hot",keyword=None,limit=10,detail=100):
+    rows=[]; needle=(keyword or "").casefold()
+    for value in items:
+        row=dict(value); row["category"]=str(row.get("category") or "general"); summary=str(row.get("summary") or "")
+        if category!="hot" and row["category"]!=category: continue
+        if needle and needle not in (str(row.get("title") or "")+" "+summary).casefold(): continue
+        if detail==0: row["summary"]=""
+        elif detail>0 and len(summary)>detail: row["summary"]=summary[:detail]+"..."
+        rows.append(row)
+        if len(rows)>=limit: break
+    return rows
+def source_catalog(config):
+    result={"hot":[]}
+    for source in config.get("sources",[]):
+        if not source.get("enabled",True): continue
+        info={key:source.get(key) for key in ("name","url","type","daily_default")}; result.setdefault(source.get("category","general"),[]).append(info)
+        if source.get("daily_default",True): result["hot"].append(info)
+    return result
+def format_query(rows):
+    lines=[]
+    for index,row in enumerate(rows,1):
+        lines += [f"{index}. {row.get('title','')}",f"   来源：{row.get('source','未知')}｜类别：{row.get('category','general')}",f"   链接：{row.get('url') or row.get('link','')}"]
+        if row.get("summary"): lines.append(f"   摘要：{row['summary']}")
+    return "\n".join(lines) if lines else "没有找到符合条件的新闻。"
 def build(raw, run_at, config):
     start,end=window(run_at,config); seen=set(); eligible=[]; review=[]
     for item in raw.get("items",[]):
@@ -77,6 +113,15 @@ def build(raw, run_at, config):
     if not ready: risks.append("候选数量、类别覆盖或成功来源不足")
     return {"schema_version":1,"content_type":"daily-news","package_id":f"daily-news-{run_at.astimezone(BJT):%Y-%m-%d}","run_at":run_at.isoformat(),"status":"ready_for_human_review" if ready else "needs_review","window":{"start":start.isoformat(),"end":end.isoformat(),"boundary":"left_closed_right_open"},"collection":meta,"items":chosen,"sources":[{"name":x.get("source"),"url":x.get("url")} for x in chosen],"risks":risks,"review_items":review}
 def target(root, run_at): return Path(root)/"daily-news"/run_at.astimezone(BJT).date().isoformat()
+def source_report(raw,package):
+    meta=raw.get("meta",{}); configured=int(meta.get("configured_sources",0)); successful=int(meta.get("successful_sources",0)); rate=f"{successful/configured:.1%}" if configured else "离线输入，未统计"
+    source_counts={}; category_counts={}
+    for row in raw.get("items",[]): source_counts[row.get("source","未知")]=source_counts.get(row.get("source","未知"),0)+1; category_counts[row.get("category","general")]=category_counts.get(row.get("category","general"),0)+1
+    lines=["# 新闻来源与采集报告","",f"- 采集成功率：**{rate}**",f"- 配置来源：{configured}",f"- 成功来源：{successful}",f"- 失败来源：{int(meta.get('failed_sources',len(raw.get('errors',[]))))}",f"- 原始候选：{len(raw.get('items',[]))}",f"- 最终入选：{len(package.get('items',[]))}","","## 来源平台","","| 平台 | 候选数 |","|---|---:|"]
+    lines += [f"| {name} | {count} |" for name,count in sorted(source_counts.items())]; lines += ["","## 类别分布","","| 类别 | 候选数 | 占比 |","|---|---:|---:|"]; total=max(1,len(raw.get("items",[]))); lines += [f"| {name} | {count} | {count/total:.1%} |" for name,count in sorted(category_counts.items())]
+    if raw.get("errors"): lines += ["","## 失败来源","",*[f"- {x.get('source')}：{x.get('error')}" for x in raw["errors"]]]
+    lines += ["","## 边界说明","","采集成功率只表示本次配置来源的请求结果，不代表新闻覆盖率或事实准确率达到 100%。发布前仍须打开原文进行人工核验。"]
+    return "\n".join(lines)
 def archive_revision(out, names):
     existing=[out/name for name in names if (out/name).exists()]
     if not existing: return None
@@ -86,7 +131,13 @@ def archive_revision(out, names):
     for path in existing: shutil.copy2(path,revision/path.name)
     return revision
 def main():
-    p=argparse.ArgumentParser(); p.add_argument("command",choices=("collect","build","verify","all")); p.add_argument("--config",type=Path,default=ROOT/"assets/default-config.json"); p.add_argument("--input",type=Path); p.add_argument("--output-root",type=Path,default=Path.cwd()); p.add_argument("--run-at"); p.add_argument("--mode",choices=("stable","refresh","rebuild"),default="stable"); a=p.parse_args(); config=load(a.config); run_at=datetime.fromisoformat(a.run_at).astimezone(BJT) if a.run_at else datetime.now(BJT); out=target(a.output_root,run_at); raw_path=out/"raw-news.json"; package_path=out/"content-package.json"
+    p=argparse.ArgumentParser(); p.add_argument("command",choices=("collect","build","verify","all","query","sources")); p.add_argument("--config",type=Path,default=ROOT/"assets/default-config.json"); p.add_argument("--input",type=Path); p.add_argument("--output-root",type=Path,default=Path.cwd()); p.add_argument("--run-at"); p.add_argument("--mode",choices=("stable","refresh","rebuild"),default="stable"); p.add_argument("--category",default="hot"); p.add_argument("--keyword"); p.add_argument("--limit",type=int,default=10); p.add_argument("--detail",type=int,default=100); p.add_argument("--format",dest="output_format",choices=("text","json"),default="text"); a=p.parse_args(); config=load(a.config); run_at=datetime.fromisoformat(a.run_at).astimezone(BJT) if a.run_at else datetime.now(BJT); out=target(a.output_root,run_at); raw_path=out/"raw-news.json"; package_path=out/"content-package.json"
+    if a.command=="sources":
+        catalog=source_catalog(config); print(json.dumps(catalog,ensure_ascii=False,indent=2) if a.output_format=="json" else "\n".join(f"{category}: {', '.join(x['name'] for x in sources)}" for category,sources in catalog.items())); return
+    if a.command=="query":
+        catalog=source_catalog(config)
+        if a.category not in catalog: raise SystemExit(f"不支持的类别：{a.category}")
+        raw=load(a.input) if a.input else collect(config,run_at,categories=None if a.category=="hot" else {a.category}); rows=query_items(raw.get("items",raw if isinstance(raw,list) else []),a.category,a.keyword,max(1,a.limit),a.detail); print(json.dumps(rows,ensure_ascii=False,indent=2) if a.output_format=="json" else format_query(rows)); return
     if a.mode=="rebuild" and not raw_path.exists(): raise SystemExit("rebuild 需要已有原始快照 raw-news.json")
     if a.mode=="refresh" and a.command in ("collect","build","all"): archive_revision(out,("raw-news.json","content-package.json"))
     if a.command in ("collect","all") and a.mode!="rebuild" and (a.mode=="refresh" or not raw_path.exists()): save(raw_path, load(a.input) if a.input else collect(config,run_at))
@@ -94,7 +145,7 @@ def main():
         if a.command=="build" and a.mode=="refresh" and a.input: save(raw_path,load(a.input))
         if not raw_path.exists() and a.input and a.mode!="rebuild": save(raw_path,load(a.input))
         if not raw_path.exists(): raise SystemExit("缺少原始快照 raw-news.json")
-        package=build(load(raw_path),run_at,config); package["snapshot"]={"mode":a.mode,"file":raw_path.name,"sha256":hashlib.sha256(raw_path.read_bytes()).hexdigest()}; save(package_path,package)
+        raw=load(raw_path); package=build(raw,run_at,config); package["snapshot"]={"mode":a.mode,"file":raw_path.name,"sha256":hashlib.sha256(raw_path.read_bytes()).hexdigest()}; save(package_path,package); write(out/"source-report.md",source_report(raw,package))
     if a.command in ("verify","all"):
         path=package_path
         if not path.exists(): raise SystemExit("缺少 content-package.json")
@@ -102,6 +153,7 @@ def main():
         if payload.get("schema_version")!=1: errors.append("不支持的 schema_version")
         if payload.get("content_type")!="daily-news": errors.append("content_type 错误")
         if not payload.get("items"): errors.append("没有入选新闻")
+        if not (out/"source-report.md").exists(): errors.append("缺少 source-report.md")
         if errors: raise SystemExit("；".join(errors))
         print("OK")
 if __name__=="__main__": main()

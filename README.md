@@ -22,7 +22,7 @@ github-hot-research ───┘
 
 | Skill | 功能 | 使用状态 |
 |---|---|---|
-| [`daily-news-research`](daily-news-research/README.md) | 查询前一日新闻，完成时间过滤、去重、核验和筛选 | 推荐的新研究层 |
+| [`daily-news-research`](daily-news-research/README.md) | 分类查询国内外及 AI 资讯，并完成前一日新闻过滤、去重、核验和筛选 | 推荐的新研究层 |
 | [`github-hot-research`](github-hot-research/README.md) | 查询执行时刻前连续 7 天的 GitHub 热门项目并核验 | 推荐的新研究层 |
 | [`wechat-content`](wechat-content/README.md) | 把标准内容包制作成可复制的公众号正文、配图和封面 | 推荐的平台制作层 |
 | [`daily-news-wechat`](daily-news-wechat/README.md) | 新闻采集与公众号制作的一体化旧入口 | 继续兼容 |

@@ -1,5 +1,4 @@
 interface:
   display_name: "每日新闻研究"
-  short_description: "核验前一日新闻并生成平台无关内容包"
-  default_prompt: "使用 $daily-news-research 生成本期新闻标准内容包。"
-
+  short_description: "查询分类新闻并生成前一日标准内容包"
+  default_prompt: "使用 $daily-news-research 查询或核验新闻，并按需要生成标准内容包。"

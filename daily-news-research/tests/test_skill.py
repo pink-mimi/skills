@@ -31,12 +31,41 @@ class DailyNewsResearchTests(unittest.TestCase):
         self.assertEqual(len(result["errors"]),1)
         self.assertEqual(len(result["items"]),2)
 
+    def test_query_supports_category_keyword_limit_and_detail(self):
+        rows=json.loads(FIXTURE.read_text(encoding="utf-8"))["items"]
+        result=run.query_items(rows,category="tech",keyword="人工智能",limit=1,detail=12)
+        self.assertEqual(len(result),1)
+        self.assertEqual(result[0]["category"],"tech")
+        self.assertLessEqual(len(result[0]["summary"]),15)
+
+    def test_sources_command_lists_all_supported_categories(self):
+        result=subprocess.run([sys.executable,str(SKILL/"scripts/run.py"),"sources","--format","json"],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        payload=json.loads(result.stdout)
+        for category in ("hot","politics","finance","tech","society","world","sports","entertainment","ai","ai-community"):
+            self.assertIn(category,payload)
+
+    def test_query_command_can_use_offline_input(self):
+        result=subprocess.run([sys.executable,str(SKILL/"scripts/run.py"),"query","--input",str(FIXTURE),"--category","tech","--limit","2","--format","json"],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        payload=json.loads(result.stdout)
+        self.assertLessEqual(len(payload),2)
+        self.assertTrue(all(row["category"]=="tech" for row in payload))
+
     def test_offline_content_package(self):
         with tempfile.TemporaryDirectory() as temp:
             result=subprocess.run([sys.executable,str(SKILL/"scripts/run.py"),"all","--input",str(FIXTURE),"--output-root",temp,"--run-at","2026-07-19T06:20:00+08:00"],capture_output=True,text=True)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
             data=json.loads((Path(temp)/"daily-news/2026-07-19/content-package.json").read_text(encoding="utf-8"))
             self.assertEqual((data["schema_version"],data["content_type"]),(1,"daily-news")); self.assertNotIn("wechat_html",data)
+            report=(Path(temp)/"daily-news/2026-07-19/source-report.md")
+            self.assertTrue(report.exists())
+            report_text=report.read_text(encoding="utf-8")
+            self.assertIn("采集成功率",report_text)
+            self.assertIn("类别分布",report_text)
     def test_chinese_docs(self):
         self.assertIn("## 使用步骤",(SKILL/"README.md").read_text(encoding="utf-8"))
+        catalog=(SKILL/"references/source-catalog.md").read_text(encoding="utf-8")
+        self.assertIn("来源平台",catalog)
+        self.assertIn("不能保证 100%",catalog)
 if __name__=="__main__": unittest.main()
