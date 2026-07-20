@@ -11,6 +11,7 @@
 | Skill | 功能 | 特点 | 效果预览 |
 |---|---|---|---|
 | [`daily-news-wechat`](daily-news-wechat/README.md) | 每日新闻采集、筛选、核验与公众号成稿 | 北京时间窗口、来源核验、7 套主题、双封面 | [查看详情与效果图](daily-news-wechat/README.md) |
+| [`github-hot-wechat`](github-hot-wechat/README.md) | 每周 GitHub 热门核验与公众号成稿 | 7 天窗口、历史去重、4 套主题、Image 2 可选 | [查看详情与效果图](github-hot-wechat/README.md) |
 
 ## 安装
 
@@ -24,6 +25,12 @@ npx skills add pink-mimi/skills --list
 
 ```bash
 npx skills add pink-mimi/skills --skill daily-news-wechat
+```
+
+安装 GitHub 热门 Skill：
+
+```bash
+npx skills add pink-mimi/skills --skill github-hot-wechat
 ```
 
 使用 pnpm 也可以：
@@ -47,9 +54,13 @@ skills/
 │   ├── scripts/
 │   ├── references/
 │   └── tests/
-└── another-skill/
+└── github-hot-wechat/
     ├── SKILL.md
     ├── README.md
+    ├── agents/
+    ├── assets/
+    ├── scripts/
+    ├── references/
     └── tests/
 ```
 

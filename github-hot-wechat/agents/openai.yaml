@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub 热门公众号"
+  short_description: "每周 GitHub 热门采集、核验与公众号审核包生成工具"
+  default_prompt: "Use $github-hot-wechat to create a verified weekly GitHub hot-project WeChat review package."

@@ -17,3 +17,5 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m unittest discover -s daily-news-wechat/tests -v
       - run: python -m py_compile daily-news-wechat/scripts/*.py
+      - run: python -m unittest discover -s github-hot-wechat/tests -v
+      - run: python -m py_compile github-hot-wechat/scripts/*.py

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#f7f3e8"/>
+  <text x="70" y="82" font-family="Microsoft YaHei,sans-serif" font-size="42" font-weight="700" fill="#154f4b">GitHub 热门公众号 · 四套主题</text>
+  <text x="72" y="122" font-family="Microsoft YaHei,sans-serif" font-size="20" fill="#55716d">同一套选题规则，不同的正文、封面与插图气质</text>
+  <g transform="translate(70 165)">
+    <rect width="540" height="210" rx="18" fill="#eef8f5" stroke="#7bbeb3"/>
+    <circle cx="425" cy="104" r="68" fill="none" stroke="#168f83" stroke-width="3"/>
+    <path d="M330 140 C390 75 445 165 520 70" fill="none" stroke="#f28a36" stroke-width="5"/>
+    <text x="32" y="58" font-family="Microsoft YaHei,sans-serif" font-size="24" font-weight="700" fill="#154f4b">开放坐标</text>
+    <text x="32" y="98" font-family="Microsoft YaHei,sans-serif" font-size="17" fill="#55716d">暖白 · 薄荷 · 深青 · 暖橙</text>
+  </g>
+  <g transform="translate(670 165)">
+    <rect width="540" height="210" rx="18" fill="#f0f3f6" stroke="#8798aa"/>
+    <rect x="322" y="46" width="170" height="118" rx="8" fill="#f5f1e8" stroke="#30435a"/>
+    <path d="M342 78h120M342 104h95M342 130h110" stroke="#d49a3a" stroke-width="5"/>
+    <text x="32" y="58" font-family="Microsoft YaHei,sans-serif" font-size="24" font-weight="700" fill="#30435a">代码档案</text>
+    <text x="32" y="98" font-family="Microsoft YaHei,sans-serif" font-size="17" fill="#66788a">纸张 · 索引 · 蓝灰 · 琥珀</text>
+  </g>
+  <g transform="translate(70 420)">
+    <rect width="540" height="210" rx="18" fill="#f7f0df" stroke="#c9a57a"/>
+    <path d="M330 54h150M330 88h132M330 122h154M330 156h110" stroke="#c96f3b" stroke-width="3"/>
+    <circle cx="500" cy="155" r="20" fill="none" stroke="#4f4a38" stroke-width="3"/>
+    <text x="32" y="58" font-family="Microsoft YaHei,sans-serif" font-size="24" font-weight="700" fill="#4f4a38">开源野笔记</text>
+    <text x="32" y="98" font-family="Microsoft YaHei,sans-serif" font-size="17" fill="#766e58">温暖纸张 · 印刷线条 · 手账结构</text>
+  </g>
+  <g transform="translate(670 420)">
+    <rect width="540" height="210" rx="18" fill="#ffffff" stroke="#79b9c5"/>
+    <path d="M310 30v150M365 30v150M420 30v150M475 30v150M290 55h220M290 110h220M290 165h220" stroke="#d9eef2"/>
+    <rect x="346" y="75" width="109" height="70" rx="10" fill="#2b8ea3"/>
+    <text x="32" y="58" font-family="Microsoft YaHei,sans-serif" font-size="24" font-weight="700" fill="#204b5a">清爽网格</text>
+    <text x="32" y="98" font-family="Microsoft YaHei,sans-serif" font-size="17" fill="#587b85">大留白 · 细网格 · 蓝绿高亮</text>
+  </g>
+</svg>

@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "timezone": "Asia/Shanghai",
+  "window": {"duration_days": 7},
+  "discovery": {"languages": ["", "python", "typescript", "go", "rust", "c++"], "candidate_minimum": 12, "candidate_maximum": 20, "minimum_non_ai_candidates": 5},
+  "selection": {"minimum": 5, "maximum": 5, "maximum_ai": 3, "maximum_per_category": 3, "history_lookback_weeks": 8},
+  "themes": ["open-coordinates", "code-archive", "field-notes", "clean-grid"],
+  "images": {"project_images": true, "ending_image": true, "maximum_bytes": 2097152}
+}
