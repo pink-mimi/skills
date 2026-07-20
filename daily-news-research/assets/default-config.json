@@ -2,7 +2,16 @@
   "schema_version": 1,
   "timezone": "Asia/Shanghai",
   "window": {"end_time": "06:00", "duration_hours": 24},
+  "collection": {"timeout_seconds": 10, "max_workers": 6, "minimum_successful_sources": 3},
   "selection": {"minimum": 5, "maximum": 8, "minimum_categories": 4, "maximum_per_category": 2},
-  "sources": []
+  "sources": [
+    {"name": "人民网·时政", "url": "http://www.people.com.cn/rss/politics.xml", "category": "politics", "enabled": true},
+    {"name": "人民网·财经", "url": "http://www.people.com.cn/rss/finance.xml", "category": "finance", "enabled": true},
+    {"name": "人民网·社会", "url": "http://www.people.com.cn/rss/society.xml", "category": "society", "enabled": true},
+    {"name": "人民网·国际", "url": "http://www.people.com.cn/rss/world.xml", "category": "world", "enabled": true},
+    {"name": "人民网·科技", "url": "http://www.people.com.cn/rss/it.xml", "category": "tech", "enabled": true},
+    {"name": "中国新闻网·滚动", "url": "https://www.chinanews.com/rss/scroll-news.xml", "category": "general", "enabled": true},
+    {"name": "中国新闻网·国内", "url": "https://www.chinanews.com.cn/rss/china.xml", "category": "society", "enabled": true},
+    {"name": "IT之家", "url": "https://www.ithome.com/rss/", "category": "tech", "enabled": true}
+  ]
 }
-

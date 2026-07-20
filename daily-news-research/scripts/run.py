@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import argparse, hashlib, json, re, shutil, urllib.request
+import argparse, hashlib, html, json, re, shutil, urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -25,18 +26,36 @@ def parse_time(value):
         try: parsed = parsedate_to_datetime(str(value))
         except (TypeError, ValueError): return None
     return (parsed if parsed.tzinfo else parsed.replace(tzinfo=BJT)).astimezone(BJT)
-def collect(config, run_at):
-    items=[]; errors=[]
-    for source in config.get("sources", []):
-        if not source.get("enabled", True): continue
+def clean(value): return re.sub(r"\s+"," ",html.unescape(re.sub(r"<[^>]+>","",value or ""))).strip()
+def parse_feed(payload,source):
+    root=ET.fromstring(payload); rows=[]
+    for node in root.iter("item"):
+        get=lambda name:(node.findtext(name) or "").strip(); title=clean(get("title")); url=get("link")
+        if title and url: rows.append({"title":title,"url":url,"source":source["name"],"category":source.get("category","general"),"summary":clean(get("description") or get("summary")),"published_at":get("pubDate") or get("date")})
+    if rows: return rows
+    atom="{http://www.w3.org/2005/Atom}"
+    for node in root.iter(f"{atom}entry"):
+        title=clean(node.findtext(f"{atom}title") or ""); link=node.find(f"{atom}link"); url=link.get("href","") if link is not None else ""
+        if title and url: rows.append({"title":title,"url":url,"source":source["name"],"category":source.get("category","general"),"summary":clean(node.findtext(f"{atom}summary") or node.findtext(f"{atom}content") or ""),"published_at":node.findtext(f"{atom}published") or node.findtext(f"{atom}updated")})
+    return rows
+def collect(config,run_at,opener=urllib.request.urlopen):
+    sources=[x for x in config.get("sources",[]) if x.get("enabled",True)]; settings=config.get("collection",{}); timeout=int(settings.get("timeout_seconds",10)); workers=max(1,min(int(settings.get("max_workers",6)),len(sources) or 1))
+    def fetch(index,source):
         try:
-            request=urllib.request.Request(source["url"], headers={"User-Agent":"daily-news-research/1.0"})
-            root=ET.fromstring(urllib.request.urlopen(request, timeout=20).read())
-            for node in root.findall(".//item"):
-                get=lambda name: (node.findtext(name) or "").strip()
-                items.append({"title":get("title"),"url":get("link"),"source":source["name"],"category":source.get("category","general"),"summary":re.sub(r"<[^>]+>","",get("description")),"published_at":get("pubDate")})
-        except Exception as exc: errors.append({"source":source.get("name"),"error":str(exc)})
-    return {"fetched_at":run_at.isoformat(),"items":items,"errors":errors}
+            request=urllib.request.Request(source["url"],headers={"User-Agent":"daily-news-research/1.1 (+https://github.com/pink-mimi/skills)"})
+            with opener(request,timeout=timeout) as response: rows=parse_feed(response.read(),source)
+            return index,rows,None
+        except Exception as exc: return index,[],{"source":source.get("name"),"url":source.get("url"),"error":f"{type(exc).__name__}: {exc}"}
+    results=[]
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures=[pool.submit(fetch,index,source) for index,source in enumerate(sources)]
+        for future in as_completed(futures): results.append(future.result())
+    results.sort(key=lambda value:value[0]); items=[]; errors=[]; successful=0
+    for _,rows,error in results:
+        items.extend(rows)
+        if error: errors.append(error)
+        else: successful+=1
+    return {"fetched_at":run_at.isoformat(),"meta":{"configured_sources":len(sources),"successful_sources":successful,"failed_sources":len(errors)},"items":items,"errors":errors}
 def build(raw, run_at, config):
     start,end=window(run_at,config); seen=set(); eligible=[]; review=[]
     for item in raw.get("items",[]):
@@ -51,8 +70,12 @@ def build(raw, run_at, config):
         if counts.get(category,0)>=int(config["selection"]["maximum_per_category"]): continue
         chosen.append(row); counts[category]=counts.get(category,0)+1
         if len(chosen)>=maximum: break
-    ready=len(chosen)>=int(config["selection"]["minimum"]) and len(counts)>=int(config["selection"]["minimum_categories"]) and not raw.get("errors")
-    return {"schema_version":1,"content_type":"daily-news","package_id":f"daily-news-{run_at.astimezone(BJT):%Y-%m-%d}","run_at":run_at.isoformat(),"status":"ready_for_human_review" if ready else "needs_review","window":{"start":start.isoformat(),"end":end.isoformat(),"boundary":"left_closed_right_open"},"items":chosen,"sources":[{"name":x.get("source"),"url":x.get("url")} for x in chosen],"risks":["发布前逐条打开原文复核"] + (["采集源存在错误或数量不足"] if not ready else []),"review_items":review}
+    meta=raw.get("meta",{}); minimum_sources=int(config.get("collection",{}).get("minimum_successful_sources",0)); source_ok=not meta or int(meta.get("successful_sources",0))>=minimum_sources
+    ready=len(chosen)>=int(config["selection"]["minimum"]) and len(counts)>=int(config["selection"]["minimum_categories"]) and source_ok
+    risks=["发布前逐条打开原文复核"]
+    if raw.get("errors"): risks.append(f"{len(raw['errors'])} 个来源采集失败，已保留错误记录")
+    if not ready: risks.append("候选数量、类别覆盖或成功来源不足")
+    return {"schema_version":1,"content_type":"daily-news","package_id":f"daily-news-{run_at.astimezone(BJT):%Y-%m-%d}","run_at":run_at.isoformat(),"status":"ready_for_human_review" if ready else "needs_review","window":{"start":start.isoformat(),"end":end.isoformat(),"boundary":"left_closed_right_open"},"collection":meta,"items":chosen,"sources":[{"name":x.get("source"),"url":x.get("url")} for x in chosen],"risks":risks,"review_items":review}
 def target(root, run_at): return Path(root)/"daily-news"/run_at.astimezone(BJT).date().isoformat()
 def archive_revision(out, names):
     existing=[out/name for name in names if (out/name).exists()]
