@@ -27,11 +27,16 @@ class WechatContentTests(unittest.TestCase):
             out=self.build("daily-news-content-package.json",temp)
             page=(out/"微信版.html").read_text(encoding="utf-8")
             article=(out/"公众号成稿.md").read_text(encoding="utf-8")
-            self.assertIn("昨日坐标",page)
+            self.assertIn("30秒速览",page)
+            self.assertIn("发生了什么",page)
+            self.assertIn("为什么重要",page)
+            self.assertIn("普通人需要注意什么",page)
             self.assertIn("data:image/png;base64,",page)
             self.assertNotIn('src="images/',page)
-            self.assertIn("images/新闻-01.png",article)
+            self.assertIn("images/新闻一日脉络.png",article)
             self.assertNotIn("images/项目-01.png",article)
+            self.assertIn("7月19日国内新闻梳理",article)
+            self.assertIn("信息来源与动态说明",article)
 
     def test_github_uses_project_template(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -52,5 +57,24 @@ class WechatContentTests(unittest.TestCase):
             manifest=json.loads((out/"render-manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["content_template"],"daily-news")
             self.assertRegex(manifest["template_version"],r"^\d+\.\d+\.\d+$")
-            self.assertEqual(manifest["image_mode"],"template_fallback")
+            self.assertEqual(manifest["image_mode"],"bundled_image2_base")
+
+    def test_news_preview_title_is_outside_copy_region(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out=self.build("daily-news-content-package.json",temp)
+            page=(out/"微信版.html").read_text(encoding="utf-8")
+            preview=page.index('id="cover-preview"')
+            copy=page.index('id="wechat-content"')
+            self.assertLess(preview,copy)
+            self.assertIn("封面和标题不包含在复制区域",page[preview:copy])
+
+    def test_incomplete_news_package_is_downgraded_to_needs_review(self):
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        fixture["items"][0].pop("why_it_matters")
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/"incomplete.json"; source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
+            out=self.build(source,temp)
+            self.assertIn("输入内容仍需人工核验",(out/"微信版.html").read_text(encoding="utf-8"))
+            manifest=json.loads((out/"render-manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["input_status"],"needs_review")
 if __name__=="__main__": unittest.main()

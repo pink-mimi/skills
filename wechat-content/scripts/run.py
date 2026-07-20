@@ -9,7 +9,8 @@ from pathlib import Path
 from rendering import build_article, build_html, render_images
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE_VERSION = "2.0.0"
+TEMPLATE_VERSION = "2.1.0"
+NEWS_REQUIRED_FIELDS = ("what_happened", "why_it_matters", "reader_action", "editor_note", "keywords")
 
 
 def load(path: Path) -> dict:
@@ -46,6 +47,16 @@ def title_options(content_type: str, title: str, count: int) -> list[str]:
     return [title, f"未完地图｜{title}", f"本周开源坐标：{count} 个值得收藏的项目", f"GitHub 本周观察：这 {count} 个项目解决了什么", f"从热榜到实用：本周值得打开的 {count} 个项目"]
 
 
+def enforce_content_quality(payload: dict) -> dict:
+    payload=dict(payload); payload["items"]=[dict(item) for item in payload.get("items",[])]
+    if payload.get("content_type")=="daily-news":
+        incomplete=[item for item in payload["items"] if any(not item.get(field) for field in NEWS_REQUIRED_FIELDS)]
+        if incomplete:
+            payload["status"]="needs_review"
+            payload["risks"]=list(payload.get("risks") or [])+[f"{len(incomplete)} 条新闻缺少发布级解释字段"]
+    return payload
+
+
 def verify(out: Path, payload: dict) -> None:
     errors = []
     for name in ("公众号成稿.md", "微信版.html", "备选标题.txt", "公众号摘要.txt", "运行报告.md", "render-manifest.json"):
@@ -55,11 +66,13 @@ def verify(out: Path, payload: dict) -> None:
         path = out / "images" / name
         if not path.exists() or png_size(path) != size:
             errors.append(f"图片异常 {name}")
-    prefix = "新闻" if payload["content_type"] == "daily-news" else "项目"
-    for index in range(1, len(payload["items"]) + 1):
-        path = out / "images" / f"{prefix}-{index:02d}.png"
-        if not path.exists() or png_size(path) != (1200, 675):
-            errors.append(f"图片异常 {path.name}")
+    if payload["content_type"] == "daily-news":
+        path=out/"images"/"新闻一日脉络.png"
+        if not path.exists() or png_size(path)!=(1200,675): errors.append("图片异常 新闻一日脉络.png")
+    else:
+        for index in range(1, len(payload["items"]) + 1):
+            path = out / "images" / f"项目-{index:02d}.png"
+            if not path.exists() or png_size(path) != (1200, 675): errors.append(f"图片异常 {path.name}")
     page = (out / "微信版.html").read_text(encoding="utf-8") if (out / "微信版.html").exists() else ""
     for token in ('id="copy-wechat"', 'id="wechat-content"', "ClipboardItem", "data:image/png;base64,"):
         if token not in page:
@@ -81,19 +94,21 @@ def main() -> None:
     payload, config = load(args.input), load(args.config)
     if payload.get("schema_version") != 1 or payload.get("content_type") not in ("daily-news", "github-hot"):
         raise SystemExit("不支持的标准内容包")
+    payload=enforce_content_quality(payload)
     run_at = datetime.fromisoformat(payload["run_at"])
     out = output(args.output_root, payload)
     theme = choose_theme(payload["content_type"], args.theme, config, run_at)
     if args.command in ("build", "all"):
         article, title, summary = build_article(payload)
-        render_images(out / "images", payload, theme, title)
+        cover_title=(payload.get("editorial") or {}).get("cover_title") or (f"昨天，这 {len(payload['items'])} 件事值得关注" if payload["content_type"]=="daily-news" else title)
+        image_mode = render_images(out / "images", payload, theme, cover_title)
         write(out / "公众号成稿.md", article)
         write(out / "微信版.html", build_html(article, out / "images", payload, theme))
         write(out / "备选标题.txt", "\n".join(title_options(payload["content_type"], title, len(payload["items"]))))
         write(out / "公众号摘要.txt", summary)
-        manifest = {"schema_version": 1, "content_template": payload["content_type"], "template_version": TEMPLATE_VERSION, "theme": theme, "theme_version": "2.0.0", "image_mode": "template_fallback", "source_package": payload["package_id"]}
+        manifest = {"schema_version": 1, "content_template": payload["content_type"], "template_version": TEMPLATE_VERSION, "theme": theme, "theme_version": "2.0.0", "image_mode": image_mode, "input_status":payload["status"], "source_package": payload["package_id"]}
         write(out / "render-manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-        write(out / "运行报告.md", f"# 运行报告\n\n- content_type: `{payload['content_type']}`\n- input_status: `{payload['status']}`\n- content_template: `{payload['content_type']}@{TEMPLATE_VERSION}`\n- theme: `{theme}@2.0.0`\n- image_mode: `template_fallback`\n- 发布：仅生成审核包，未上传、未发布。")
+        write(out / "运行报告.md", f"# 运行报告\n\n- content_type: `{payload['content_type']}`\n- input_status: `{payload['status']}`\n- content_template: `{payload['content_type']}@{TEMPLATE_VERSION}`\n- theme: `{theme}@2.0.0`\n- image_mode: `{image_mode}`\n- 发布：仅生成审核包，未上传、未发布。")
     if args.command in ("verify", "all"):
         verify(out, payload)
         print("OK")

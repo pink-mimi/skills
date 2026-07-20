@@ -4,9 +4,12 @@ import base64
 import html
 import io
 import re
+from datetime import datetime
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+ASSETS = Path(__file__).resolve().parents[1] / "assets"
 
 PALETTES = {
     "news-blue": ("#EAF4FF", "#0B3154", "#1769E0", "#F3A33C"),
@@ -36,6 +39,32 @@ def shorten(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+def wrap_by_width(draw, text: str, text_font, max_width: int, max_lines: int = 2) -> list[str]:
+    text = re.sub(r"\s+", "", str(text or ""))
+    lines, current = [], ""
+    for character in text:
+        candidate = current + character
+        if current and draw.textbbox((0, 0), candidate, font=text_font)[2] > max_width:
+            lines.append(current)
+            current = character
+            if len(lines) == max_lines - 1:
+                break
+        else:
+            current = candidate
+    remainder_start = sum(len(line) for line in lines)
+    remainder = text[remainder_start:]
+    if len(lines) < max_lines and remainder:
+        current = ""
+        for character in remainder:
+            candidate = current + character
+            if current and draw.textbbox((0, 0), candidate + "…", font=text_font)[2] > max_width:
+                current = current.rstrip("，。；、") + "…"
+                break
+            current = candidate
+        lines.append(current)
+    return lines[:max_lines]
+
+
 def draw_grid(draw, box, color, step=48):
     x0, y0, x1, y1 = box
     for x in range(x0, x1 + 1, step):
@@ -44,17 +73,29 @@ def draw_grid(draw, box, color, step=48):
         draw.line((x0, y, x1, y), fill=color, width=1)
 
 
-def cover_panel(size, title, kicker, palette, square=False):
+def cover_panel(size, title, kicker, palette, square=False, base_path=None):
     bg, ink, primary, accent = palette
-    image = Image.new("RGB", size, bg)
+    if base_path and Path(base_path).exists():
+        centering = (0.34, 0.5) if square else (0.5, 0.5)
+        with Image.open(base_path) as source:
+            image = ImageOps.fit(source.convert("RGB"), size, method=Image.Resampling.LANCZOS, centering=centering)
+        veil = Image.new("RGBA", size, (0, 0, 0, 0))
+        veil_draw = ImageDraw.Draw(veil)
+        width, height = size
+        panel_right = width - 28 if square else int(width * 0.58)
+        veil_draw.rounded_rectangle((22, 24, panel_right, height - 24), 26, fill=(255, 255, 255, 238), outline=primary, width=2)
+        image = Image.alpha_composite(image.convert("RGBA"), veil).convert("RGB")
+    else:
+        image = Image.new("RGB", size, bg)
     draw = ImageDraw.Draw(image)
     width, height = size
-    draw_grid(draw, (0, 0, width, height), "#DCEAEC", 54)
-    draw.rounded_rectangle((24, 24, width - 24, height - 24), 28, fill="#FFFFFF", outline=primary, width=2)
-    if square:
+    if not (base_path and Path(base_path).exists()):
+        draw_grid(draw, (0, 0, width, height), "#DCEAEC", 54)
+        draw.rounded_rectangle((24, 24, width - 24, height - 24), 28, fill="#FFFFFF", outline=primary, width=2)
+    if square and not (base_path and Path(base_path).exists()):
         draw.ellipse((width - 118, height - 122, width - 38, height - 42), fill=primary)
         draw.arc((width - 180, height - 190, width - 20, height - 30), 195, 340, fill=accent, width=8)
-    else:
+    elif not (base_path and Path(base_path).exists()):
         draw.ellipse((width - 205, -55, width + 55, 205), fill=primary)
         draw.arc((width - 260, 120, width - 25, 355), 200, 350, fill=accent, width=10)
         draw.line((width - 235, 265, width - 80, 215), fill=accent, width=8)
@@ -62,12 +103,13 @@ def cover_panel(size, title, kicker, palette, square=False):
     left = 54 if not square else 38
     display_kicker = kicker if not square else kicker.split("·")[0].strip()
     draw.text((left, 58), display_kicker, font=font(24 if not square else 21, True), fill=primary)
-    display_title = re.sub(r"\s+", "", title) if square else title
-    max_chars = 16 if not square else 8
-    words = [shorten(display_title, max_chars)] if len(display_title) <= max_chars else [display_title[:max_chars], shorten(display_title[max_chars:], max_chars)]
+    display_title = re.sub(r"\s+", "", title)
+    title_font = font(39 if not square else 34, True)
+    panel_right = width - 42 if square else (int(width * 0.58) - 30 if base_path and Path(base_path).exists() else width - 42)
+    words = wrap_by_width(draw, display_title, title_font, panel_right - left, 2)
     y = 112
     for line in words[:2]:
-        draw.text((left, y), line, font=font(43 if not square else 34, True), fill=ink)
+        draw.text((left, y), line, font=title_font, fill=ink)
         y += 58 if not square else 50
     draw.rounded_rectangle((left, height - 72, min(width - 40, left + 220), height - 42), 15, fill=accent)
     draw.text((left + 16, height - 69), "未完地图 · 保持好奇", font=font(17, True), fill="#FFFFFF")
@@ -125,31 +167,95 @@ def ending_card(size, content_type, palette):
     return image
 
 
+def news_overview_card(size, items, palette, base_path=None):
+    bg, ink, primary, accent = palette
+    if base_path and Path(base_path).exists():
+        with Image.open(base_path) as source:
+            image = ImageOps.fit(source.convert("RGB"), size, method=Image.Resampling.LANCZOS)
+        shade = Image.new("RGBA", size, (0, 0, 0, 0))
+        ImageDraw.Draw(shade).rounded_rectangle((34, 30, 1166, 158), 28, fill=(255, 255, 255, 230))
+        image = Image.alpha_composite(image.convert("RGBA"), shade).convert("RGB")
+    else:
+        image = Image.new("RGB", size, bg)
+    draw = ImageDraw.Draw(image)
+    width, height = size
+    if not (base_path and Path(base_path).exists()):
+        draw_grid(draw, (0, 0, width, height), "#D9E8F3", 64)
+        draw.rounded_rectangle((35, 35, width-35, height-35), 30, fill="#FFFFFF", outline=primary, width=3)
+    draw.text((68, 62), "昨日新闻 · 一日脉络", font=font(38, True), fill=ink)
+    draw.text((70, 118), "从事实出发，看见变化之间的联系", font=font(22), fill=primary)
+    if base_path and Path(base_path).exists():
+        category_names = {"society": "社会民生", "politics": "时政", "finance": "财经", "technology": "科技", "international": "国际", "sports": "体育", "culture": "文化"}
+        usable = items[:6]
+        positions = ((84, 207), (390, 175), (724, 198), (934, 326), (676, 472), (267, 458))
+        for index, item in enumerate(usable):
+            x, y = positions[index]
+            category = category_names.get(item.get("category"), item.get("category") or "新闻")
+            label = f"{index + 1:02d}  {shorten(category, 5)}"
+            box_w = 184
+            draw.rounded_rectangle((x, y, x + box_w, y + 48), 18, fill="#FFFFFF", outline=primary, width=2)
+            draw.text((x + 14, y + 10), label, font=font(19, True), fill=ink)
+        return image
+    usable=items[:6]; start_x=115; end_x=width-115; y=375
+    draw.line((start_x,y,end_x,y),fill=primary,width=12)
+    gap=(end_x-start_x)//max(1,len(usable)-1) if len(usable)>1 else 0
+    for index,item in enumerate(usable):
+        x=start_x+index*gap
+        draw.ellipse((x-34,y-34,x+34,y+34),fill="#FFFFFF",outline=primary,width=8)
+        draw.ellipse((x-12,y-12,x+12,y+12),fill=accent)
+        title=shorten(item.get("title",""),10)
+        category_names = {"society": "社会民生", "politics": "时政", "finance": "财经", "technology": "科技", "international": "国际", "sports": "体育", "culture": "文化"}
+        category=shorten(category_names.get(item.get("category"), item.get("category","新闻")),6)
+        ty=220 if index%2==0 else 465
+        draw.rounded_rectangle((x-76,ty-18,x+76,ty+82),18,fill=bg)
+        draw.text((x-58,ty-6),category,font=font(18,True),fill=primary)
+        draw.multiline_text((x-58,ty+23),title,font=font(17),fill=ink,spacing=5)
+        draw.line((x,ty+82 if index%2==0 else ty-18,x,y-38 if index%2==0 else y+38),fill="#A9C7D9",width=3)
+    return image
+
+
 def render_images(directory: Path, payload: dict, theme: str, title: str):
     directory.mkdir(parents=True, exist_ok=True)
     palette = PALETTES[theme]
     kicker = "昨日大事 · 每日观察" if payload["content_type"] == "daily-news" else "GitHub 热门 · 每周精选"
-    wide = cover_panel((900, 383), title, kicker, palette)
-    square = cover_panel((383, 383), title, kicker, palette, square=True)
+    use_bundled_base = payload["content_type"] == "daily-news" and (ASSETS / "news-cover-base.png").exists()
+    cover_base = ASSETS / "news-cover-base.png" if use_bundled_base else None
+    wide = cover_panel((900, 383), title, kicker, palette, base_path=cover_base)
+    square = cover_panel((383, 383), title, kicker, palette, square=True, base_path=cover_base)
     combined = Image.new("RGB", (1283, 383), palette[0]); combined.paste(wide, (0, 0)); combined.paste(square, (900, 0))
     for name, image in (("横版封面.png", wide), ("方形封面.png", square), ("合并封面.png", combined)):
         image.save(directory / name, optimize=True)
-    prefix = "新闻" if payload["content_type"] == "daily-news" else "项目"
-    for index, item in enumerate(payload["items"], 1):
-        body_card((1200, 675), item, index, payload["content_type"], palette).save(directory / f"{prefix}-{index:02d}.png", optimize=True)
+    if payload["content_type"] == "daily-news":
+        overview_base = ASSETS / "news-overview-base.png" if (ASSETS / "news-overview-base.png").exists() else None
+        news_overview_card((1200, 675), payload["items"], palette, overview_base).save(directory / "新闻一日脉络.png", optimize=True)
+    else:
+        for index, item in enumerate(payload["items"], 1):
+            body_card((1200, 675), item, index, payload["content_type"], palette).save(directory / f"项目-{index:02d}.png", optimize=True)
     ending_card((1200, 675), payload["content_type"], palette).save(directory / "结尾图.png", optimize=True)
+    return "bundled_image2_base" if use_bundled_base else "template_fallback"
 
 
 def build_article(payload: dict):
     items = payload["items"]
     if payload["content_type"] == "daily-news":
-        title = f"昨天，这 {len(items)} 件事值得关注"
-        intro = "真正影响生活的变化，往往不会只停留在热搜里。它可能藏在一项新安排、一组数字，或一项刚刚落地的技术中。今天沿着几条不同的线索回看昨天：哪些已经抵达日常，哪些还需要继续观察。"
-        lines = [f"# {title}", "", intro, "", "> 昨日坐标｜把重要变化放回它真实发生的位置"]
+        editorial=payload.get("editorial") or {}
+        start=datetime.fromisoformat(payload["window"]["start"]); end=datetime.fromisoformat(payload["window"]["end"])
+        date_label=f"{start.month}月{start.day}日"
+        title = editorial.get("title") or f"{date_label}国内新闻梳理：{len(items)}条变化值得继续关注"
+        overview=editorial.get("overview") or [item.get("summary") or item.get("title","") for item in items]
+        window_text=f"北京时间 {start.year}年{start.month}月{start.day}日{start:%H:%M}—{end.month}月{end.day}日{end:%H:%M}"
+        lines = [f"# {title}", "", f"> 统计时段：{window_text}。动态信息以内容包核验时刻为准。", "", "## 30秒速览", ""]
+        lines += [f"- {text}" for text in overview]
+        lines += ["", "![国内新闻一日脉络](images/新闻一日脉络.png)"]
+        numerals="一二三四五六七八九十"
         for index, item in enumerate(items, 1):
-            lines += ["", "---", "", f"## {index:02d}｜{item.get('title','')}", "", f"![{item.get('title','')}](images/新闻-{index:02d}.png)", "", item.get("summary") or "原文未提供摘要，请人工补充。", "", f"**发生时间**　{item.get('published_at','待确认')}", "", f"**信息来源**　[{item.get('source','原始来源')}]({item.get('url','')})"]
-        lines += ["", "---", "", "## 地图之外，再多看一步", "", "一条新闻的意义，不只在它昨天有没有登上热搜，而在它接下来会不会改变我们的选择。你最想继续追踪哪一件事？也欢迎留下你看到的线索，我们明天接着核对。", "", "![结尾图](images/结尾图.png)"]
-        summary = f"回看昨天值得继续关注的 {len(items)} 条变化：不追逐热闹，只梳理事实、影响与后续线索。"
+            keywords="｜".join(item.get("keywords") or [item.get("category","新闻")])
+            lines += ["", "---", "", f"## {numerals[index-1] if index<=len(numerals) else index}、{item.get('title','')}", "", f"> **关键词：{keywords}**", "", "**发生了什么**", "", item.get("what_happened") or item.get("summary") or "待人工补充。", "", "**为什么重要**", "", item.get("why_it_matters") or "待人工补充：内容包未提供影响说明。", "", "**普通人需要注意什么**", "", item.get("reader_action") or "待人工补充：内容包未提供读者行动建议。", "", f"> **小清提醒：** {item.get('editor_note') or '发布前请结合原文补充准确、克制的提醒。'}"]
+        follow_up=editorial.get("follow_up") or [shorten(item.get("title",""),28) for item in items[:3]]
+        lines += ["", "## 今天值得关注", "", *[f"- {text}" for text in follow_up], "", "## 信息来源与动态说明", ""]
+        for index,item in enumerate(items,1): lines.append(f"{index}. [{item.get('source','原始来源')}：{item.get('title','')}]({item.get('url','')})")
+        lines += ["", "> 本文依据公开资料整理。灾情、天气、市场和政策信息可能持续更新，请以有关部门最新通报为准。本文为“未完地图”人工审核包，尚未发布。", "", "![结尾图](images/结尾图.png)"]
+        summary = editorial.get("summary") or f"梳理{date_label}值得继续关注的 {len(items)} 条国内新闻，说明发生了什么、为什么重要，以及普通人需要留意什么。"
     else:
         title = f"本周 GitHub 热门：{len(items)} 个值得关注的开源项目"
         intro = "一个项目登上热榜，可能是踩中了当下的需求；一个项目值得留下，则要看它能否真正解决问题。本周从热度之外再走一步：看看这些开源工具在做什么、适合谁，以及开始使用前有哪些门槛需要知道。"
@@ -180,7 +286,8 @@ def data_uri(path: Path):
 def build_html(markdown: str, image_dir: Path, payload: dict, theme: str):
     bg, ink, primary, accent = PALETTES[theme]
     label = "昨日坐标" if payload["content_type"] == "daily-news" else "开源坐标"
-    blocks = [f'<section style="margin:0 0 26px;padding:18px 20px;background:{bg};border-left:5px solid {primary};border-radius:4px"><strong style="color:{primary};font-size:15px;letter-spacing:1px">{label}</strong><div style="margin-top:6px;color:#64747a;font-size:13px">未完地图 · 记录正在发生的世界</div></section>']
+    title=next((line[2:].strip() for line in markdown.splitlines() if line.startswith("# ")),"微信公众号审核包")
+    blocks = []
     for raw in markdown.splitlines():
         line = raw.strip()
         if not line: continue
@@ -189,11 +296,14 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str):
             src = data_uri(image_dir / Path(match.group(2)).name)
             blocks.append(f'<img src="{src}" alt="{html.escape(match.group(1))}" style="display:block;width:100%;height:auto;margin:24px 0;border-radius:10px">'); continue
         if line == "---": blocks.append(f'<div style="height:1px;background:{primary}22;margin:34px 0"></div>'); continue
-        if line.startswith("# "): blocks.append(f'<h1 style="font-size:29px;line-height:1.45;color:{ink};margin:0 0 20px;font-weight:800">{inline(line[2:],primary)}</h1>'); continue
-        if line.startswith("## "): blocks.append(f'<section style="margin:30px 0 16px"><div style="display:inline-block;padding:3px 10px;background:{accent};color:#fff;border-radius:14px;font-size:13px;font-weight:700">{label}</div><h2 style="font-size:22px;line-height:1.5;color:{ink};margin:10px 0 0;font-weight:800">{inline(line[3:],primary)}</h2></section>'); continue
+        if line.startswith("# "): continue
+        if line.startswith("## "): blocks.append(f'<section style="margin:34px 0 18px"><div style="width:36px;height:4px;margin-bottom:10px;border-radius:2px;background:{primary}"></div><h2 style="font-size:21px;line-height:1.55;color:{ink};margin:0;font-weight:800">{inline(line[3:],primary)}</h2></section>'); continue
         if line.startswith("> "): blocks.append(f'<blockquote style="margin:20px 0;padding:16px 18px;background:{bg};border:0;border-radius:8px;color:{primary};font-size:15px;line-height:1.8">{inline(line[2:],primary)}</blockquote>'); continue
+        if line.startswith("- "): blocks.append(f'<p style="font-size:16px;line-height:1.9;color:#334E68;margin:7px 0 7px 18px;text-indent:-18px">•　{inline(line[2:],primary)}</p>'); continue
+        if re.match(r"^\d+\. ",line): blocks.append(f'<p style="font-size:14px;line-height:1.8;color:#536875;margin:8px 0;overflow-wrap:anywhere">{inline(line,primary)}</p>'); continue
         if line.startswith("**"):
             blocks.append(f'<p style="font-size:15px;line-height:1.85;color:#465C63;margin:7px 0;padding:8px 12px;background:{bg};border-radius:6px;overflow-wrap:anywhere">{inline(line,primary)}</p>'); continue
         blocks.append(f'<p style="font-size:16px;line-height:1.95;color:#31474F;margin:12px 0;text-align:justify;overflow-wrap:anywhere">{inline(line,primary)}</p>')
     notice = "" if payload["status"] == "ready_for_human_review" else '<div style="max-width:740px;margin:18px auto;padding:12px;background:#FFF2CC;color:#6B5415">输入内容仍需人工核验，请勿直接发布。</div>'
-    return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>微信公众号审核包</title></head><body style="margin:0;background:#EAF1F4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif"><div style="position:sticky;top:0;background:#102F49;padding:15px;text-align:center;z-index:9"><button id="copy-wechat" style="padding:12px 24px;border:0;border-radius:7px;background:#fff;color:#1769E0;font-size:17px;font-weight:700;cursor:pointer" onclick="copyWechat()">一键复制公众号正文</button><span id="copy-status" style="color:white;margin-left:14px">复制后粘贴到微信公众号编辑器</span></div>{notice}<main style="max-width:740px;margin:24px auto;background:#fff;padding:34px 38px;box-sizing:border-box;border-radius:14px"><section id="wechat-content">{''.join(blocks)}</section></main><script>async function copyWechat(){{const node=document.getElementById('wechat-content');try{{const htmlBlob=new Blob([node.innerHTML],{{type:'text/html'}});const textBlob=new Blob([node.innerText],{{type:'text/plain'}});await navigator.clipboard.write([new ClipboardItem({{'text/html':htmlBlob,'text/plain':textBlob}})]);document.getElementById('copy-status').textContent='复制成功，请到公众号编辑器粘贴';}}catch(error){{const range=document.createRange();range.selectNodeContents(node);const selection=getSelection();selection.removeAllRanges();selection.addRange(range);document.execCommand('copy');selection.removeAllRanges();document.getElementById('copy-status').textContent='已复制，请粘贴后检查图片';}}}}</script></body></html>'''
+    cover=data_uri(image_dir/"横版封面.png")
+    return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)}｜微信排版预览</title></head><body style="margin:0;background:#EFF6FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif"><div style="position:sticky;top:0;background:#102A43;padding:15px;text-align:center;z-index:9"><button id="copy-wechat" style="padding:12px 24px;border:0;border-radius:7px;background:#fff;color:#2563EB;font-size:17px;font-weight:700;cursor:pointer" onclick="copyWechat()">一键复制公众号正文</button><span id="copy-status" style="color:#DBEAFE;margin-left:14px">复制后粘贴到微信公众号编辑器</span></div>{notice}<main style="max-width:760px;margin:24px auto;padding:0 16px 40px;box-sizing:border-box"><section id="cover-preview" style="margin-bottom:18px;padding:18px;background:#fff;border-radius:12px;box-shadow:0 4px 18px rgba(30,64,175,.08)"><img src="{cover}" alt="横版封面" style="display:block;width:100%;height:auto;border-radius:8px"><h1 style="margin:20px 0 8px;color:#102A43;font-size:27px;line-height:1.4">{html.escape(title)}</h1><p style="margin:0;color:#64748B;font-size:14px">封面和标题不包含在复制区域，请在公众号后台分别填写。</p></section><article id="wechat-content" style="padding:28px 24px;border-radius:12px;background:#fff;box-shadow:0 4px 18px rgba(30,64,175,.08)">{''.join(blocks)}</article></main><script>async function copyWechat(){{const node=document.getElementById('wechat-content');try{{const htmlBlob=new Blob([node.innerHTML],{{type:'text/html'}});const textBlob=new Blob([node.innerText],{{type:'text/plain'}});await navigator.clipboard.write([new ClipboardItem({{'text/html':htmlBlob,'text/plain':textBlob}})]);document.getElementById('copy-status').textContent='复制成功，请到公众号编辑器粘贴';}}catch(error){{const range=document.createRange();range.selectNodeContents(node);const selection=getSelection();selection.removeAllRanges();selection.addRange(range);document.execCommand('copy');selection.removeAllRanges();document.getElementById('copy-status').textContent='已复制，请粘贴后检查图片';}}}}</script></body></html>'''

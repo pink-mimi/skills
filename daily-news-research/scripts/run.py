@@ -92,6 +92,17 @@ def format_query(rows):
         lines += [f"{index}. {row.get('title','')}",f"   来源：{row.get('source','未知')}｜类别：{row.get('category','general')}",f"   链接：{row.get('url') or row.get('link','')}"]
         if row.get("summary"): lines.append(f"   摘要：{row['summary']}")
     return "\n".join(lines) if lines else "没有找到符合条件的新闻。"
+def domestic_relevant(row):
+    if row.get("domestic_relevance") is True: return True
+    if row.get("domestic_relevance") is False: return False
+    category=str(row.get("category") or "").strip().lower()
+    domestic_categories={"politics","finance","society","tech","technology","public-safety","culture","education","时政","财经","社会","科技","公共安全","文化","教育","民生"}
+    if category in domestic_categories: return True
+    text=" ".join(str(row.get(key) or "") for key in ("title","summary","source"))
+    markers=("中国","国内","我国","北京","上海","天津","重庆","香港","澳门","台湾","国务院","国家统计局","水利部","应急管理部","教育部","工信部","国家卫健委","新华社","人民网","央视")
+    return any(marker in text for marker in markers)
+def editorial_complete(row,required):
+    return all(row.get(field) and (not isinstance(row.get(field),list) or len(row[field])>0) for field in required)
 def build(raw, run_at, config):
     start,end=window(run_at,config); seen=set(); eligible=[]; review=[]
     for item in raw.get("items",[]):
@@ -99,6 +110,9 @@ def build(raw, run_at, config):
         published=parse_time(row.get("published_at")); key=re.sub(r"\W","",str(row.get("title","")).lower())
         if not key or not row["url"] or not published: review.append(row); continue
         if not start <= published < end or key in seen: continue
+        if config.get("selection",{}).get("scope")=="domestic" and not domestic_relevant(row):
+            row["review_reason"]="与国内日报定位缺少直接关联"
+            review.append(row); continue
         seen.add(key); row["published_at"]=published.isoformat(); eligible.append(row)
     chosen=[]; counts={}; maximum=int(config["selection"]["maximum"])
     for row in eligible:
@@ -107,11 +121,15 @@ def build(raw, run_at, config):
         chosen.append(row); counts[category]=counts.get(category,0)+1
         if len(chosen)>=maximum: break
     meta=raw.get("meta",{}); minimum_sources=int(config.get("collection",{}).get("minimum_successful_sources",0)); source_ok=not meta or int(meta.get("successful_sources",0))>=minimum_sources
-    ready=len(chosen)>=int(config["selection"]["minimum"]) and len(counts)>=int(config["selection"]["minimum_categories"]) and source_ok
+    required=config.get("selection",{}).get("required_editorial_fields",[])
+    incomplete=[row for row in chosen if not editorial_complete(row,required)]
+    base_ready=len(chosen)>=int(config["selection"]["minimum"]) and len(counts)>=int(config["selection"]["minimum_categories"]) and source_ok
+    ready=base_ready and not incomplete
     risks=["发布前逐条打开原文复核"]
     if raw.get("errors"): risks.append(f"{len(raw['errors'])} 个来源采集失败，已保留错误记录")
-    if not ready: risks.append("候选数量、类别覆盖或成功来源不足")
-    return {"schema_version":1,"content_type":"daily-news","package_id":f"daily-news-{run_at.astimezone(BJT):%Y-%m-%d}","run_at":run_at.isoformat(),"status":"ready_for_human_review" if ready else "needs_review","window":{"start":start.isoformat(),"end":end.isoformat(),"boundary":"left_closed_right_open"},"collection":meta,"items":chosen,"sources":[{"name":x.get("source"),"url":x.get("url")} for x in chosen],"risks":risks,"review_items":review}
+    if not base_ready: risks.append("候选数量、类别覆盖或成功来源不足")
+    if incomplete: risks.append(f"{len(incomplete)} 条新闻缺少发生了什么、为什么重要、读者行动或提醒等深度字段")
+    return {"schema_version":1,"content_type":"daily-news","package_id":f"daily-news-{run_at.astimezone(BJT):%Y-%m-%d}","run_at":run_at.isoformat(),"status":"ready_for_human_review" if ready else "needs_review","window":{"start":start.isoformat(),"end":end.isoformat(),"boundary":"left_closed_right_open"},"collection":meta,"editorial":raw.get("editorial",{}),"items":chosen,"sources":[{"name":x.get("source"),"url":x.get("url")} for x in chosen],"risks":risks,"review_items":review}
 def target(root, run_at): return Path(root)/"daily-news"/run_at.astimezone(BJT).date().isoformat()
 def source_report(raw,package):
     meta=raw.get("meta",{}); configured=int(meta.get("configured_sources",0)); successful=int(meta.get("successful_sources",0)); rate=f"{successful/configured:.1%}" if configured else "离线输入，未统计"

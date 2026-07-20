@@ -4,6 +4,28 @@ from pathlib import Path
 SKILL=Path(__file__).resolve().parents[1]; FIXTURE=SKILL.parent/"daily-news-wechat/tests/fixtures/raw-news.json"
 SPEC=importlib.util.spec_from_file_location("daily_news_research_run",SKILL/"scripts/run.py"); run=importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(run)
 class DailyNewsResearchTests(unittest.TestCase):
+    def test_domestic_digest_rejects_unrelated_foreign_items(self):
+        config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
+        base={"published_at":"2026-07-19T12:00:00+08:00","summary":"摘要","what_happened":"事实","why_it_matters":"影响","reader_action":"建议","editor_note":"提醒","keywords":["关键词"]}
+        rows=[]
+        domestic_categories=("时政","财经","科技","公共安全")
+        for index,title in enumerate(("中国多地推进公共服务安排","国内服务消费数据发布","北京发布科技应用计划","广西更新防汛响应","加拿大调整边境措施","美军在伊拉克发生事故","世界杯决赛准备就绪")):
+            row=dict(base,title=title,url=f"https://example.com/{index}",source="官方来源",category=domestic_categories[index] if index<4 else "国际")
+            rows.append(row)
+        package=run.build({"items":rows},run.datetime.fromisoformat("2026-07-20T06:00:00+08:00"),config)
+        self.assertEqual([x["title"] for x in package["items"]],[x["title"] for x in rows[:4]])
+        self.assertEqual(package["status"],"needs_review")
+
+    def test_ready_status_requires_full_editorial_fields(self):
+        config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
+        items=[]
+        categories=("时政","财经","社会","科技","公共安全")
+        for index,category in enumerate(categories):
+            items.append({"title":f"中国新闻{index}","url":f"https://example.com/{index}","source":"官方来源","category":category,"summary":"只有摘要","published_at":"2026-07-19T12:00:00+08:00"})
+        package=run.build({"items":items},run.datetime.fromisoformat("2026-07-20T06:00:00+08:00"),config)
+        self.assertEqual(package["status"],"needs_review")
+        self.assertTrue(any("深度字段" in risk for risk in package["risks"]))
+
     def test_default_sources_cover_four_categories(self):
         config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
         enabled=[x for x in config["sources"] if x.get("enabled",True)]
