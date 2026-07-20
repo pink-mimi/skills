@@ -19,3 +19,10 @@ jobs:
       - run: python -m py_compile daily-news-wechat/scripts/*.py
       - run: python -m unittest discover -s github-hot-wechat/tests -v
       - run: python -m py_compile github-hot-wechat/scripts/*.py
+      - run: python -m unittest discover -s daily-news-research/tests -v
+      - run: python -m py_compile daily-news-research/scripts/*.py
+      - run: python -m unittest discover -s github-hot-research/tests -v
+      - run: python -m py_compile github-hot-research/scripts/*.py
+      - run: python -m unittest discover -s wechat-content/tests -v
+      - run: python -m py_compile wechat-content/scripts/*.py
+      - run: python -m unittest tests.test_modular_architecture -v

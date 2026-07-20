@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "timezone": "Asia/Shanghai",
+  "window": {"end_time": "06:00", "duration_hours": 24},
+  "selection": {"minimum": 5, "maximum": 8, "minimum_categories": 4, "maximum_per_category": 2},
+  "sources": []
+}
+
