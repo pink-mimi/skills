@@ -23,3 +23,8 @@ python scripts/run.py all --run-at 2026-07-25T09:00:00+08:00 --output-root outpu
 
 定时运行由外部自动化负责；本 Skill 不生成公众号排版、封面或发布操作。
 
+## 重复运行模式
+
+- `--mode stable`：默认。同一期已有 `raw-candidates.json` 时复用原始快照。
+- `--mode refresh`：重新采集，并把上一版原始快照和内容包保存到 `revisions/revision-NN/`。
+- `--mode rebuild`：不联网，只根据已有原始快照重新筛选；缺少快照时停止。

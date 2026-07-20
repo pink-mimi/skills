@@ -15,3 +15,6 @@
 
 下载 Skill 后不会自行每周运行；请使用 Codex 自动化或系统任务计划定时调用。
 
+## 重复运行
+
+默认 `stable` 模式复用本期原始候选，保证重复生成稳定。主动重新联网使用 `--mode refresh`，旧快照和内容包会保存到 `revisions/revision-NN/`；只重新评分和筛选使用 `--mode rebuild`。

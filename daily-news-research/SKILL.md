@@ -25,3 +25,8 @@ python scripts/run.py all --run-at 2026-07-20T06:00:00+08:00 --output-root outpu
 
 默认窗口为 `[前一日 06:00，当日 06:00)`，可在配置中修改。定时执行由 Codex 自动化或系统任务计划负责，本 Skill 不自行常驻运行。
 
+## 重复运行模式
+
+- `--mode stable`：默认。同一期已有 `raw-news.json` 时复用原始快照，保证重复生成稳定。
+- `--mode refresh`：重新采集，并把上一版原始快照和内容包保存到 `revisions/revision-NN/`。
+- `--mode rebuild`：不联网，只根据已有原始快照重新筛选；缺少快照时停止。

@@ -12,6 +12,43 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ModularArchitectureTests(unittest.TestCase):
+    def test_research_snapshot_modes_are_stable_and_revisioned(self):
+        cases = (
+            ("daily-news-research", ROOT / "daily-news-wechat/tests/fixtures/raw-news.json", "2026-07-19T06:20:00+08:00", "daily-news/2026-07-19", "raw-news.json"),
+            ("github-hot-research", ROOT / "github-hot-wechat/tests/fixtures/candidates.json", "2026-07-25T09:00:00+08:00", "github-hot/2026-07-25", "raw-candidates.json"),
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for skill_name, fixture, run_at, relative, raw_name in cases:
+                skill = ROOT / skill_name
+                changed = root / f"{skill_name}-changed.json"
+                payload = json.loads(fixture.read_text(encoding="utf-8"))
+                payload["items"][0]["title" if skill_name.startswith("daily") else "description"] = "第二次采集产生的变化"
+                changed.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+                base = [sys.executable, str(skill / "scripts/run.py"), "all", "--output-root", str(root), "--run-at", run_at]
+                first = subprocess.run(base + ["--input", str(fixture)], capture_output=True, text=True)
+                self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+                target = root / relative
+                original_raw = (target / raw_name).read_text(encoding="utf-8")
+                stable = subprocess.run(base + ["--input", str(changed)], capture_output=True, text=True)
+                self.assertEqual(stable.returncode, 0, stable.stdout + stable.stderr)
+                self.assertEqual((target / raw_name).read_text(encoding="utf-8"), original_raw)
+                refreshed = subprocess.run(base + ["--input", str(changed), "--mode", "refresh"], capture_output=True, text=True)
+                self.assertEqual(refreshed.returncode, 0, refreshed.stdout + refreshed.stderr)
+                self.assertNotEqual((target / raw_name).read_text(encoding="utf-8"), original_raw)
+                self.assertTrue((target / "revisions/revision-01" / raw_name).exists())
+                self.assertTrue((target / "revisions/revision-01/content-package.json").exists())
+
+    def test_rebuild_requires_existing_snapshot(self):
+        with tempfile.TemporaryDirectory() as temp:
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "daily-news-research/scripts/run.py"), "all",
+                 "--output-root", temp, "--run-at", "2026-07-19T06:20:00+08:00", "--mode", "rebuild"],
+                capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("原始快照", result.stdout + result.stderr)
+
     def test_skill_metadata_utf8_and_no_placeholders(self):
         for name in ("daily-news-research", "github-hot-research", "wechat-content"):
             text = (ROOT / name / "SKILL.md").read_text(encoding="utf-8")

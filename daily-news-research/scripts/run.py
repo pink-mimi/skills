@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import argparse, json, re, urllib.request
+import argparse, hashlib, json, re, shutil, urllib.request
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -54,12 +54,26 @@ def build(raw, run_at, config):
     ready=len(chosen)>=int(config["selection"]["minimum"]) and len(counts)>=int(config["selection"]["minimum_categories"]) and not raw.get("errors")
     return {"schema_version":1,"content_type":"daily-news","package_id":f"daily-news-{run_at.astimezone(BJT):%Y-%m-%d}","run_at":run_at.isoformat(),"status":"ready_for_human_review" if ready else "needs_review","window":{"start":start.isoformat(),"end":end.isoformat(),"boundary":"left_closed_right_open"},"items":chosen,"sources":[{"name":x.get("source"),"url":x.get("url")} for x in chosen],"risks":["发布前逐条打开原文复核"] + (["采集源存在错误或数量不足"] if not ready else []),"review_items":review}
 def target(root, run_at): return Path(root)/"daily-news"/run_at.astimezone(BJT).date().isoformat()
+def archive_revision(out, names):
+    existing=[out/name for name in names if (out/name).exists()]
+    if not existing: return None
+    base=out/"revisions"; number=1
+    while (base/f"revision-{number:02d}").exists(): number+=1
+    revision=base/f"revision-{number:02d}"; revision.mkdir(parents=True,exist_ok=False)
+    for path in existing: shutil.copy2(path,revision/path.name)
+    return revision
 def main():
-    p=argparse.ArgumentParser(); p.add_argument("command",choices=("collect","build","verify","all")); p.add_argument("--config",type=Path,default=ROOT/"assets/default-config.json"); p.add_argument("--input",type=Path); p.add_argument("--output-root",type=Path,default=Path.cwd()); p.add_argument("--run-at"); a=p.parse_args(); config=load(a.config); run_at=datetime.fromisoformat(a.run_at).astimezone(BJT) if a.run_at else datetime.now(BJT); out=target(a.output_root,run_at); raw_path=out/"raw-news.json"
-    if a.command in ("collect","all"): save(raw_path, load(a.input) if a.input else collect(config,run_at))
-    if a.command in ("build","all"): save(out/"content-package.json",build(load(a.input) if a.input and not raw_path.exists() else load(raw_path),run_at,config))
+    p=argparse.ArgumentParser(); p.add_argument("command",choices=("collect","build","verify","all")); p.add_argument("--config",type=Path,default=ROOT/"assets/default-config.json"); p.add_argument("--input",type=Path); p.add_argument("--output-root",type=Path,default=Path.cwd()); p.add_argument("--run-at"); p.add_argument("--mode",choices=("stable","refresh","rebuild"),default="stable"); a=p.parse_args(); config=load(a.config); run_at=datetime.fromisoformat(a.run_at).astimezone(BJT) if a.run_at else datetime.now(BJT); out=target(a.output_root,run_at); raw_path=out/"raw-news.json"; package_path=out/"content-package.json"
+    if a.mode=="rebuild" and not raw_path.exists(): raise SystemExit("rebuild 需要已有原始快照 raw-news.json")
+    if a.mode=="refresh" and a.command in ("collect","build","all"): archive_revision(out,("raw-news.json","content-package.json"))
+    if a.command in ("collect","all") and a.mode!="rebuild" and (a.mode=="refresh" or not raw_path.exists()): save(raw_path, load(a.input) if a.input else collect(config,run_at))
+    if a.command in ("build","all"):
+        if a.command=="build" and a.mode=="refresh" and a.input: save(raw_path,load(a.input))
+        if not raw_path.exists() and a.input and a.mode!="rebuild": save(raw_path,load(a.input))
+        if not raw_path.exists(): raise SystemExit("缺少原始快照 raw-news.json")
+        package=build(load(raw_path),run_at,config); package["snapshot"]={"mode":a.mode,"file":raw_path.name,"sha256":hashlib.sha256(raw_path.read_bytes()).hexdigest()}; save(package_path,package)
     if a.command in ("verify","all"):
-        path=out/"content-package.json"
+        path=package_path
         if not path.exists(): raise SystemExit("缺少 content-package.json")
         payload=load(path); errors=[]
         if payload.get("schema_version")!=1: errors.append("不支持的 schema_version")
