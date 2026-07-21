@@ -44,6 +44,17 @@ class WechatContentTests(unittest.TestCase):
         self.assertEqual(choice["name"],"unfinished-map-default")
         self.assertEqual(choice["fallback_reason"],"weekday_theme_missing")
 
+    def test_all_news_visual_assets_exist_and_are_valid(self):
+        from news_visuals import WEEKDAY_KEYS
+        for variant in (*WEEKDAY_KEYS,"default"):
+            for filename in ("cover.png","overview.png"):
+                path=ASSETS/"news-weekday"/variant/filename
+                self.assertTrue(path.exists(),path)
+                with Image.open(path) as image:
+                    self.assertGreaterEqual(image.width,1200)
+                    self.assertEqual(round(image.width/image.height,2),round(16/9,2))
+                self.assertLess(path.stat().st_size,2*1024*1024)
+
     def test_news_uses_news_template_and_embedded_copy_images(self):
         with tempfile.TemporaryDirectory() as temp:
             out=self.build("daily-news-content-package.json",temp)
