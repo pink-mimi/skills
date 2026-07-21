@@ -185,16 +185,6 @@ def news_overview_card(size, items, palette, base_path=None):
     draw.text((68, 62), "昨日新闻 · 一日脉络", font=font(38, True), fill=ink)
     draw.text((70, 118), "从事实出发，看见变化之间的联系", font=font(22), fill=primary)
     if base_path and Path(base_path).exists():
-        category_names = {"society": "社会民生", "politics": "时政", "finance": "财经", "technology": "科技", "international": "国际", "sports": "体育", "culture": "文化"}
-        usable = items[:6]
-        positions = ((84, 207), (390, 175), (724, 198), (934, 326), (676, 472), (267, 458))
-        for index, item in enumerate(usable):
-            x, y = positions[index]
-            category = category_names.get(item.get("category"), item.get("category") or "新闻")
-            label = f"{index + 1:02d}  {shorten(category, 5)}"
-            box_w = 184
-            draw.rounded_rectangle((x, y, x + box_w, y + 48), 18, fill="#FFFFFF", outline=primary, width=2)
-            draw.text((x + 14, y + 10), label, font=font(19, True), fill=ink)
         return image
     usable=items[:6]; start_x=115; end_x=width-115; y=375
     draw.line((start_x,y,end_x,y),fill=primary,width=12)
@@ -253,7 +243,9 @@ def build_article(payload: dict):
             lines += ["", "---", "", f"## {numerals[index-1] if index<=len(numerals) else index}、{item.get('title','')}", "", f"> **关键词：{keywords}**", "", "**发生了什么**", "", item.get("what_happened") or item.get("summary") or "待人工补充。", "", "**为什么重要**", "", item.get("why_it_matters") or "待人工补充：内容包未提供影响说明。", "", "**普通人需要注意什么**", "", item.get("reader_action") or "待人工补充：内容包未提供读者行动建议。", "", f"> **小清提醒：** {item.get('editor_note') or '发布前请结合原文补充准确、克制的提醒。'}"]
         follow_up=editorial.get("follow_up") or [shorten(item.get("title",""),28) for item in items[:3]]
         lines += ["", "## 今天值得关注", "", *[f"- {text}" for text in follow_up], "", "## 信息来源与动态说明", ""]
-        for index,item in enumerate(items,1): lines.append(f"{index}. [{item.get('source','原始来源')}：{item.get('title','')}]({item.get('url','')})")
+        for index,item in enumerate(items,1):
+            source_url=item.get("url","")
+            lines.append(f"{index}. [{item.get('source','原始来源')}：{item.get('title','')}]({source_url})｜链接：{source_url}")
         lines += ["", "> 本文依据公开资料整理。灾情、天气、市场和政策信息可能持续更新，请以有关部门最新通报为准。本文为“未完地图”人工审核包，尚未发布。", "", "![结尾图](images/结尾图.png)"]
         summary = editorial.get("summary") or f"梳理{date_label}值得继续关注的 {len(items)} 条国内新闻，说明发生了什么、为什么重要，以及普通人需要留意什么。"
     else:

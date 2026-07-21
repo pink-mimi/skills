@@ -1,4 +1,4 @@
-import json, subprocess, sys, tempfile, unittest
+import hashlib, json, subprocess, sys, tempfile, unittest
 from pathlib import Path
 from PIL import Image
 
@@ -37,6 +37,19 @@ class WechatContentTests(unittest.TestCase):
             self.assertNotIn("images/项目-01.png",article)
             self.assertIn("7月19日国内新闻梳理",article)
             self.assertIn("信息来源与动态说明",article)
+            self.assertIn('<a href="https://example.com/news"',page)
+            self.assertIn("链接：https://example.com/news",page)
+
+    def test_news_overview_does_not_place_dynamic_labels_on_fixed_artwork(self):
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as temp:
+            source_a=Path(temp)/"a.json"; source_b=Path(temp)/"b.json"
+            source_a.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
+            fixture["items"][0]["category"]="technology"
+            source_b.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
+            out_a=self.build(source_a,temp+"-a"); out_b=self.build(source_b,temp+"-b")
+            digest=lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+            self.assertEqual(digest(out_a/"images/新闻一日脉络.png"),digest(out_b/"images/新闻一日脉络.png"))
 
     def test_github_uses_project_template(self):
         with tempfile.TemporaryDirectory() as temp:
