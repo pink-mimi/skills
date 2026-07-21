@@ -18,6 +18,16 @@
 
 组合封面尺寸为 `1283×383`，左侧 `900×383`，右侧 `383×383`；组合图用于审核，两个独立文件用于上传。
 
+## 新闻七天七色
+
+`daily-news` 会按内容包执行日期的北京时间星期选择七套新闻配色与构图，同一天重复运行保持一致。Image 2 可用时，先生成无文字的 `cover.png` 和 `overview.png`，再运行：
+
+```powershell
+python scripts/run.py all --input content-package.json --output-root outputs --theme auto --image-input-dir work/news-images
+```
+
+有效动态图片在清单中记为 `live_image2`；没有传入或图片校验失败时，自动使用相应星期的内置图并记为 `weekday_fallback`。只有星期配置缺失或日期异常才启用第八套中性“默认兜底”。GitHub 热门不跟随这套星期轮换。
+
 ## 当前栏目模板
 
 | 内容包 | 文章结构 | 图片表达 |

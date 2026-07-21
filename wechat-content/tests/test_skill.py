@@ -58,6 +58,16 @@ class WechatContentTests(unittest.TestCase):
                     self.assertEqual(round(image.width/image.height,2),round(16/9,2))
                 self.assertLess(path.stat().st_size,2*1024*1024)
 
+    def test_chinese_docs_explain_weekday_visual_workflow(self):
+        docs="\n".join((SKILL/path).read_text(encoding="utf-8") for path in (
+            "SKILL.md",
+            "README.md",
+            "references/image2-workflow.md",
+            "references/daily-news.md",
+        ))
+        for phrase in ("七天七色","--image-input-dir","live_image2","weekday_fallback","默认兜底"):
+            self.assertIn(phrase,docs)
+
     def test_valid_live_images_are_used_and_recorded(self):
         with tempfile.TemporaryDirectory() as temp:
             live=Path(temp)/"live"; live.mkdir()
