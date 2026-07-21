@@ -175,9 +175,30 @@ class WechatContentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             source=Path(temp)/"incomplete.json"; source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
             out=self.build(source,temp)
-            self.assertIn("输入内容仍需人工核验",(out/"微信版.html").read_text(encoding="utf-8"))
+            self.assertIn("输入内容缺少发布所需字段",(out/"微信版.html").read_text(encoding="utf-8"))
             manifest=json.loads((out/"render-manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["input_status"],"needs_review")
+
+    def test_incomplete_news_disables_copy_outside_article(self):
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        fixture["items"][0].pop("why_it_matters")
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/"incomplete-copy.json"
+            source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
+            out=self.build(source,temp)
+            page=(out/"微信版.html").read_text(encoding="utf-8")
+            button=page.split('<button id="copy-wechat"',1)[1].split("</button>",1)[0]
+            self.assertIn("disabled",button)
+            self.assertIn('data-role="review-notice"',page)
+            self.assertLess(page.index('data-role="review-notice"'),page.index('id="wechat-content"'))
+
+    def test_complete_news_keeps_copy_enabled_without_review_notice(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out=self.build("daily-news-content-package.json",temp)
+            page=(out/"微信版.html").read_text(encoding="utf-8")
+            button=page.split('<button id="copy-wechat"',1)[1].split("</button>",1)[0]
+            self.assertNotIn("disabled",button)
+            self.assertNotIn('data-role="review-notice"',page)
 
     def test_news_reminder_label_matches_content_and_has_stable_default(self):
         from rendering import choose_news_reminder_label
