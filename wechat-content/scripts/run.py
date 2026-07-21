@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from rendering import build_article, build_html, render_images
+from news_visuals import choose_news_visual, valid_live_pair
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_VERSION = "2.1.0"
@@ -90,6 +91,7 @@ def main() -> None:
     parser.add_argument("--output-root", type=Path, default=Path.cwd())
     parser.add_argument("--config", type=Path, default=ROOT / "assets/default-config.json")
     parser.add_argument("--theme", default="auto")
+    parser.add_argument("--image-input-dir", type=Path)
     args = parser.parse_args()
     payload, config = load(args.input), load(args.config)
     if payload.get("schema_version") != 1 or payload.get("content_type") not in ("daily-news", "github-hot"):
@@ -98,17 +100,29 @@ def main() -> None:
     run_at = datetime.fromisoformat(payload["run_at"])
     out = output(args.output_root, payload)
     theme = choose_theme(payload["content_type"], args.theme, config, run_at)
+    visual = None
+    if payload["content_type"] == "daily-news":
+        visual = choose_news_visual(run_at, config, ROOT / "assets")
+        if valid_live_pair(args.image_input_dir, int(config["images"]["maximum_bytes"])):
+            visual.update(image_mode="live_image2", cover_path=args.image_input_dir / "cover.png", overview_path=args.image_input_dir / "overview.png", fallback_reason="")
+        else:
+            if args.image_input_dir:
+                visual["fallback_reason"] = "live_image_invalid"
+            visual["image_mode"] = "weekday_fallback"
     if args.command in ("build", "all"):
         article, title, summary = build_article(payload)
         cover_title=(payload.get("editorial") or {}).get("cover_title") or (f"昨天，这 {len(payload['items'])} 件事值得关注" if payload["content_type"]=="daily-news" else title)
-        image_mode = render_images(out / "images", payload, theme, cover_title)
+        image_mode = render_images(out / "images", payload, theme, cover_title, visual)
         write(out / "公众号成稿.md", article)
-        write(out / "微信版.html", build_html(article, out / "images", payload, theme))
+        write(out / "微信版.html", build_html(article, out / "images", payload, theme, visual))
         write(out / "备选标题.txt", "\n".join(title_options(payload["content_type"], title, len(payload["items"]))))
         write(out / "公众号摘要.txt", summary)
         manifest = {"schema_version": 1, "content_template": payload["content_type"], "template_version": TEMPLATE_VERSION, "theme": theme, "theme_version": "2.0.0", "image_mode": image_mode, "input_status":payload["status"], "source_package": payload["package_id"]}
+        if visual:
+            manifest.update({"visual_variant":visual["name"],"color_theme":visual["palette_name"],"asset_version":config["news_visuals"]["version"],"fallback_reason":visual["fallback_reason"]})
         write(out / "render-manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-        write(out / "运行报告.md", f"# 运行报告\n\n- content_type: `{payload['content_type']}`\n- input_status: `{payload['status']}`\n- content_template: `{payload['content_type']}@{TEMPLATE_VERSION}`\n- theme: `{theme}@2.0.0`\n- image_mode: `{image_mode}`\n- 发布：仅生成审核包，未上传、未发布。")
+        visual_report = "" if not visual else f"\n- visual_variant: `{visual['name']}`\n- color_theme: `{visual['palette_name']}`\n- asset_version: `{config['news_visuals']['version']}`\n- fallback_reason: `{visual['fallback_reason']}`"
+        write(out / "运行报告.md", f"# 运行报告\n\n- content_type: `{payload['content_type']}`\n- input_status: `{payload['status']}`\n- content_template: `{payload['content_type']}@{TEMPLATE_VERSION}`\n- theme: `{theme}@2.0.0`\n- image_mode: `{image_mode}`{visual_report}\n- 发布：仅生成审核包，未上传、未发布。")
     if args.command in ("verify", "all"):
         verify(out, payload)
         print("OK")

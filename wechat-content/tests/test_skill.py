@@ -1,4 +1,4 @@
-import hashlib, json, subprocess, sys, tempfile, unittest
+import hashlib, json, shutil, subprocess, sys, tempfile, unittest
 from datetime import datetime
 from pathlib import Path
 from PIL import Image
@@ -8,8 +8,11 @@ ASSETS=SKILL/"assets"
 CONFIG=json.loads((ASSETS/"default-config.json").read_text(encoding="utf-8"))
 sys.path.insert(0,str(SKILL/"scripts"))
 class WechatContentTests(unittest.TestCase):
-    def build(self, fixture, temp):
-        result=subprocess.run([sys.executable,str(SKILL/"scripts/run.py"),"all","--input",str(SKILL/"tests/fixtures"/fixture),"--output-root",temp],capture_output=True,text=True)
+    def build(self, fixture, temp, extra=None):
+        source=Path(fixture) if Path(fixture).is_absolute() else SKILL/"tests/fixtures"/fixture
+        command=[sys.executable,str(SKILL/"scripts/run.py"),"all","--input",str(source),"--output-root",temp]
+        command.extend(extra or [])
+        result=subprocess.run(command,capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         return next(Path(temp).glob(f"wechat/*/*/微信版.html")).parent
 
@@ -54,6 +57,25 @@ class WechatContentTests(unittest.TestCase):
                     self.assertGreaterEqual(image.width,1200)
                     self.assertEqual(round(image.width/image.height,2),round(16/9,2))
                 self.assertLess(path.stat().st_size,2*1024*1024)
+
+    def test_valid_live_images_are_used_and_recorded(self):
+        with tempfile.TemporaryDirectory() as temp:
+            live=Path(temp)/"live"; live.mkdir()
+            shutil.copy(ASSETS/"news-weekday/monday/cover.png",live/"cover.png")
+            shutil.copy(ASSETS/"news-weekday/monday/overview.png",live/"overview.png")
+            out=self.build("daily-news-content-package.json",temp,extra=["--image-input-dir",str(live)])
+            manifest=json.loads((out/"render-manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["image_mode"],"live_image2")
+            self.assertEqual(manifest["fallback_reason"],"")
+
+    def test_invalid_live_images_fall_back_to_weekday_asset(self):
+        with tempfile.TemporaryDirectory() as temp:
+            live=Path(temp)/"live"; live.mkdir()
+            (live/"cover.png").write_bytes(b"not-png")
+            out=self.build("daily-news-content-package.json",temp,extra=["--image-input-dir",str(live)])
+            manifest=json.loads((out/"render-manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["image_mode"],"weekday_fallback")
+            self.assertEqual(manifest["fallback_reason"],"live_image_invalid")
 
     def test_news_uses_news_template_and_embedded_copy_images(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -103,7 +125,7 @@ class WechatContentTests(unittest.TestCase):
             manifest=json.loads((out/"render-manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["content_template"],"daily-news")
             self.assertRegex(manifest["template_version"],r"^\d+\.\d+\.\d+$")
-            self.assertEqual(manifest["image_mode"],"bundled_image2_base")
+            self.assertEqual(manifest["image_mode"],"weekday_fallback")
 
     def test_news_preview_title_is_outside_copy_region(self):
         with tempfile.TemporaryDirectory() as temp:

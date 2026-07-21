@@ -204,25 +204,25 @@ def news_overview_card(size, items, palette, base_path=None):
     return image
 
 
-def render_images(directory: Path, payload: dict, theme: str, title: str):
+def render_images(directory: Path, payload: dict, theme: str, title: str, visual: dict | None = None):
     directory.mkdir(parents=True, exist_ok=True)
-    palette = PALETTES[theme]
+    palette = tuple(visual["palette"]) if visual else PALETTES[theme]
     kicker = "昨日大事 · 每日观察" if payload["content_type"] == "daily-news" else "GitHub 热门 · 每周精选"
-    use_bundled_base = payload["content_type"] == "daily-news" and (ASSETS / "news-cover-base.png").exists()
-    cover_base = ASSETS / "news-cover-base.png" if use_bundled_base else None
+    use_bundled_base = payload["content_type"] == "daily-news" and visual and Path(visual["cover_path"]).exists()
+    cover_base = Path(visual["cover_path"]) if use_bundled_base else None
     wide = cover_panel((900, 383), title, kicker, palette, base_path=cover_base)
     square = cover_panel((383, 383), title, kicker, palette, square=True, base_path=cover_base)
     combined = Image.new("RGB", (1283, 383), palette[0]); combined.paste(wide, (0, 0)); combined.paste(square, (900, 0))
     for name, image in (("横版封面.png", wide), ("方形封面.png", square), ("合并封面.png", combined)):
         image.save(directory / name, optimize=True)
     if payload["content_type"] == "daily-news":
-        overview_base = ASSETS / "news-overview-base.png" if (ASSETS / "news-overview-base.png").exists() else None
+        overview_base = Path(visual["overview_path"]) if visual and Path(visual["overview_path"]).exists() else None
         news_overview_card((1200, 675), payload["items"], palette, overview_base).save(directory / "新闻一日脉络.png", optimize=True)
     else:
         for index, item in enumerate(payload["items"], 1):
             body_card((1200, 675), item, index, payload["content_type"], palette).save(directory / f"项目-{index:02d}.png", optimize=True)
     ending_card((1200, 675), payload["content_type"], palette).save(directory / "结尾图.png", optimize=True)
-    return "bundled_image2_base" if use_bundled_base else "template_fallback"
+    return visual.get("image_mode", "weekday_fallback") if use_bundled_base else "template_fallback"
 
 
 def build_article(payload: dict):
@@ -275,8 +275,8 @@ def data_uri(path: Path):
     return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode("ascii")
 
 
-def build_html(markdown: str, image_dir: Path, payload: dict, theme: str):
-    bg, ink, primary, accent = PALETTES[theme]
+def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual: dict | None = None):
+    bg, ink, primary, accent = tuple(visual["palette"]) if visual else PALETTES[theme]
     label = "昨日坐标" if payload["content_type"] == "daily-news" else "开源坐标"
     title=next((line[2:].strip() for line in markdown.splitlines() if line.startswith("# ")),"微信公众号审核包")
     blocks = []
