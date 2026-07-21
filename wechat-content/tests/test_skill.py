@@ -264,6 +264,10 @@ class WechatContentTests(unittest.TestCase):
                 article,
                 r"\[官方来源：.+\]\(https://example.com/news\)\n\s+原文地址：https://example.com/news",
             )
+            page=(out/"微信版.html").read_text(encoding="utf-8")
+            source_url=page.split('data-role="source-url"',1)[1].split("</p>",1)[0]
+            self.assertIn("text-align:left",source_url)
+            self.assertNotIn("text-align:justify",source_url)
 
     def test_incomplete_news_article_has_no_internal_placeholders(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))

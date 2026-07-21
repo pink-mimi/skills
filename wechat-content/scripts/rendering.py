@@ -393,6 +393,8 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
             elif pending_role == "editor-note": blocks.append(f'<blockquote data-role="editor-note" style="margin:18px 0;padding:14px 16px;background:{bg};border:0;border-radius:7px;color:{ink};font-size:15px;line-height:1.8">{content}</blockquote>')
             else: blocks.append(f'<blockquote style="margin:20px 0;padding:16px 18px;background:{bg};border:0;border-radius:8px;color:{primary};font-size:15px;line-height:1.8">{content}</blockquote>')
             pending_role=None; continue
+        if line.startswith("原文地址："):
+            blocks.append(f'<p data-role="source-url" style="font-size:14px;line-height:1.75;color:#536875;margin:2px 0 14px;text-align:left;word-break:break-all;overflow-wrap:anywhere">{inline(line,primary)}</p>'); continue
         if line.startswith("- "): blocks.append(f'<p style="font-size:16px;line-height:1.75;color:#334E68;margin:6px 0 6px 18px;text-indent:-18px">•　{inline(line[2:],primary)}</p>'); continue
         if re.match(r"^\d+\. ",line): blocks.append(f'<p style="font-size:14px;line-height:1.8;color:#536875;margin:8px 0;overflow-wrap:anywhere">{inline(line,primary)}</p>'); continue
         if line.startswith("**"):
