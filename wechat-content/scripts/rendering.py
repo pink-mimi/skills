@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import difflib
 import html
 import io
 import re
@@ -72,6 +73,31 @@ def build_news_notice(items: list[dict]) -> str:
     if not notices:
         return "本文依据公开资料整理，相关信息请以原始来源最新内容为准。"
     return "本文依据公开资料整理。" + "".join(notices)
+
+
+def normalize_news_text(value: str) -> str:
+    return re.sub(r"[\W_]+", "", str(value).lower())
+
+
+def filter_news_follow_up(points: list[str], titles: list[str]) -> list[str]:
+    normalized_titles = [normalize_news_text(title) for title in titles if normalize_news_text(title)]
+    kept = []
+    seen = set()
+    for point in points:
+        normalized = normalize_news_text(point)
+        if not normalized or normalized in seen:
+            continue
+        repeats_title = any(
+            normalized in title
+            or title in normalized
+            or difflib.SequenceMatcher(None, normalized, title).ratio() >= 0.72
+            for title in normalized_titles
+        )
+        if repeats_title:
+            continue
+        seen.add(normalized)
+        kept.append(point)
+    return kept
 
 
 def font(size: int, bold: bool = False):
@@ -286,20 +312,32 @@ def build_article(payload: dict):
         title = editorial.get("title") or f"{date_label}国内新闻梳理：{len(items)}条变化值得继续关注"
         overview=editorial.get("overview") or [item.get("summary") or item.get("title","") for item in items]
         window_text=f"北京时间 {start.year}年{start.month}月{start.day}日{start:%H:%M}—{end.month}月{end.day}日{end:%H:%M}"
-        lines = [f"# {title}", "", "<!-- role:time-window -->", f"> 统计时段：{window_text}。动态信息以内容包核验时刻为准。", "", "## 30秒速览", ""]
+        lines = [f"# {title}", "", "<!-- role:time-window -->", f"> 统计时段：{window_text}。", "", "## 30秒速览", ""]
         lines += [f"- {text}" for text in overview]
         lines += ["", "![国内新闻一日脉络](images/新闻一日脉络.png)"]
         numerals="一二三四五六七八九十"
         for index, item in enumerate(items, 1):
             keywords="｜".join(item.get("keywords") or [item.get("category","新闻")])
             reminder_label=choose_news_reminder_label(item)
-            lines += ["", "---", "", f"## {numerals[index-1] if index<=len(numerals) else index}、{item.get('title','')}", "", "<!-- role:keywords -->", f"> **关键词：{keywords}**", "", "<!-- role:section-label -->", "**发生了什么**", "", item.get("what_happened") or item.get("summary") or "待人工补充。", "", "<!-- role:section-label -->", "**为什么重要**", "", item.get("why_it_matters") or "待人工补充：内容包未提供影响说明。", "", "<!-- role:section-label -->", "**普通人需要注意什么**", "", item.get("reader_action") or "待人工补充：内容包未提供读者行动建议。", "", "<!-- role:editor-note -->", f"> **{reminder_label}：** {item.get('editor_note') or '发布前请结合原文补充准确、克制的提醒。'}"]
-        follow_up=editorial.get("follow_up") or [shorten(item.get("title",""),28) for item in items[:3]]
-        lines += ["", "## 今天值得关注", "", *[f"- {text}" for text in follow_up], "", "## 信息来源与动态说明", ""]
+            lines += ["", "---", "", f"## {numerals[index-1] if index<=len(numerals) else index}、{item.get('title','')}", "", "<!-- role:keywords -->", f"> **关键词：{keywords}**"]
+            sections = (
+                ("发生了什么", item.get("what_happened") or item.get("summary")),
+                ("为什么重要", item.get("why_it_matters")),
+                ("普通人需要注意什么", item.get("reader_action")),
+            )
+            for section_label, section_text in sections:
+                if section_text:
+                    lines += ["", "<!-- role:section-label -->", f"**{section_label}**", "", section_text]
+            if item.get("editor_note"):
+                lines += ["", "<!-- role:editor-note -->", f"> **{reminder_label}：** {item['editor_note']}"]
+        follow_up=filter_news_follow_up(editorial.get("follow_up") or [], [item.get("title","") for item in items])
+        if follow_up:
+            lines += ["", "## 今天值得关注", "", *[f"- {text}" for text in follow_up]]
+        lines += ["", "## 参考来源", ""]
         for index,item in enumerate(items,1):
             source_url=item.get("url","")
-            lines.append(f"{index}. [{item.get('source','原始来源')}：{item.get('title','')}]({source_url})｜链接：{source_url}")
-        lines += ["", "> 本文依据公开资料整理。灾情、天气、市场和政策信息可能持续更新，请以有关部门最新通报为准。本文为“未完地图”人工审核包，尚未发布。", "", "![结尾图](images/结尾图.png)"]
+            lines.append(f"{index}. [{item.get('source','原始来源')}：{item.get('title','')}]({source_url})\n   原文地址：{source_url}")
+        lines += ["", f"> {build_news_notice(items)}", "", "![结尾图](images/结尾图.png)"]
         summary = editorial.get("summary") or f"梳理{date_label}值得继续关注的 {len(items)} 条国内新闻，说明发生了什么、为什么重要，以及普通人需要留意什么。"
     else:
         title = f"本周 GitHub 热门：{len(items)} 个值得关注的开源项目"

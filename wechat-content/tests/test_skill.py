@@ -101,9 +101,9 @@ class WechatContentTests(unittest.TestCase):
             self.assertIn("images/新闻一日脉络.png",article)
             self.assertNotIn("images/项目-01.png",article)
             self.assertIn("7月19日国内新闻梳理",article)
-            self.assertIn("信息来源与动态说明",article)
+            self.assertIn("参考来源",article)
             self.assertIn('<a href="https://example.com/news"',page)
-            self.assertIn("链接：https://example.com/news",page)
+            self.assertIn("原文地址：https://example.com/news",page)
 
     def test_news_overview_does_not_place_dynamic_labels_on_fixed_artwork(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
@@ -230,6 +230,42 @@ class WechatContentTests(unittest.TestCase):
             build_news_notice([{"category": "sports", "title": "比赛结束", "keywords": ["比赛"]}]),
             "本文依据公开资料整理，相关信息请以原始来源最新内容为准。",
         )
+
+    def test_news_article_excludes_internal_language_and_formats_sources(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = self.build("daily-news-content-package.json", temp)
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            for phrase in ("内容包核验", "人工审核包", "尚未发布"):
+                self.assertNotIn(phrase, article)
+            self.assertIn("## 参考来源", article)
+            self.assertNotIn("## 信息来源与动态说明", article)
+            self.assertRegex(
+                article,
+                r"\[官方来源：.+\]\(https://example.com/news\)\n\s+原文地址：https://example.com/news",
+            )
+
+    def test_incomplete_news_article_has_no_internal_placeholders(self):
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        for field in ("what_happened", "why_it_matters", "reader_action", "editor_note"):
+            fixture["items"][0].pop(field)
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/"incomplete.json"
+            source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
+            out=self.build(source,temp)
+            article=(out/"公众号成稿.md").read_text(encoding="utf-8")
+            for phrase in ("待人工补充", "内容包未提供", "发布前请结合原文补充"):
+                self.assertNotIn(phrase,article)
+
+    def test_news_follow_up_heading_is_omitted_when_points_repeat_titles(self):
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        title=fixture["items"][0]["title"]
+        fixture["editorial"]["follow_up"]=[title, f"{title}。"]
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/"duplicate-follow-up.json"
+            source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
+            out=self.build(source,temp)
+            article=(out/"公众号成稿.md").read_text(encoding="utf-8")
+            self.assertNotIn("## 今天值得关注",article)
 
     def test_news_render_uses_contextual_reminder_and_preserves_note(self):
         with tempfile.TemporaryDirectory() as temp:
