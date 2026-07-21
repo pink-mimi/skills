@@ -1,8 +1,12 @@
 import hashlib, json, subprocess, sys, tempfile, unittest
+from datetime import datetime
 from pathlib import Path
 from PIL import Image
 
 SKILL=Path(__file__).resolve().parents[1]
+ASSETS=SKILL/"assets"
+CONFIG=json.loads((ASSETS/"default-config.json").read_text(encoding="utf-8"))
+sys.path.insert(0,str(SKILL/"scripts"))
 class WechatContentTests(unittest.TestCase):
     def build(self, fixture, temp):
         result=subprocess.run([sys.executable,str(SKILL/"scripts/run.py"),"all","--input",str(SKILL/"tests/fixtures"/fixture),"--output-root",temp],capture_output=True,text=True)
@@ -21,6 +25,24 @@ class WechatContentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             result=subprocess.run([sys.executable,str(SKILL/"scripts/run.py"),"all","--input",str(bad),"--output-root",temp],capture_output=True,text=True)
             self.assertNotEqual(result.returncode,0)
+
+    def test_seven_weekdays_use_seven_news_themes_and_default_is_separate(self):
+        from news_visuals import choose_news_visual
+        names=[]
+        for day in range(13,20):
+            choice=choose_news_visual(datetime.fromisoformat(f"2026-07-{day:02d}T06:00:00+08:00"),CONFIG,ASSETS)
+            names.append(choice["name"])
+        self.assertEqual(len(set(names)),7)
+        self.assertEqual(choose_news_visual(datetime.fromisoformat("2026-07-20T06:00:00+08:00"),CONFIG,ASSETS)["name"],names[0])
+        self.assertNotIn(CONFIG["news_visuals"]["default"]["name"],names)
+
+    def test_missing_weekday_theme_uses_default(self):
+        from news_visuals import choose_news_visual
+        broken=json.loads(json.dumps(CONFIG))
+        broken["news_visuals"]["weekdays"].pop("monday")
+        choice=choose_news_visual(datetime.fromisoformat("2026-07-20T06:00:00+08:00"),broken,ASSETS)
+        self.assertEqual(choice["name"],"unfinished-map-default")
+        self.assertEqual(choice["fallback_reason"],"weekday_theme_missing")
 
     def test_news_uses_news_template_and_embedded_copy_images(self):
         with tempfile.TemporaryDirectory() as temp:
