@@ -136,6 +136,19 @@ class WechatContentTests(unittest.TestCase):
             self.assertLess(preview,copy)
             self.assertIn("封面和标题不包含在复制区域",page[preview:copy])
 
+    def test_news_layout_uses_continuous_reading_hierarchy(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out=self.build("daily-news-content-package.json",temp)
+            page=(out/"微信版.html").read_text(encoding="utf-8")
+            self.assertIn('data-role="time-window"',page)
+            self.assertIn('border-left:4px solid',page)
+            self.assertIn('data-role="keywords"',page)
+            self.assertIn('data-role="editor-note"',page)
+            self.assertIn('data-role="section-label"',page)
+            labels=[part.split("</p>",1)[0] for part in page.split('data-role="section-label"')[1:]]
+            self.assertTrue(labels)
+            self.assertTrue(all("background:" not in label for label in labels))
+
     def test_incomplete_news_package_is_downgraded_to_needs_review(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
         fixture["items"][0].pop("why_it_matters")

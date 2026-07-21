@@ -234,13 +234,13 @@ def build_article(payload: dict):
         title = editorial.get("title") or f"{date_label}国内新闻梳理：{len(items)}条变化值得继续关注"
         overview=editorial.get("overview") or [item.get("summary") or item.get("title","") for item in items]
         window_text=f"北京时间 {start.year}年{start.month}月{start.day}日{start:%H:%M}—{end.month}月{end.day}日{end:%H:%M}"
-        lines = [f"# {title}", "", f"> 统计时段：{window_text}。动态信息以内容包核验时刻为准。", "", "## 30秒速览", ""]
+        lines = [f"# {title}", "", "<!-- role:time-window -->", f"> 统计时段：{window_text}。动态信息以内容包核验时刻为准。", "", "## 30秒速览", ""]
         lines += [f"- {text}" for text in overview]
         lines += ["", "![国内新闻一日脉络](images/新闻一日脉络.png)"]
         numerals="一二三四五六七八九十"
         for index, item in enumerate(items, 1):
             keywords="｜".join(item.get("keywords") or [item.get("category","新闻")])
-            lines += ["", "---", "", f"## {numerals[index-1] if index<=len(numerals) else index}、{item.get('title','')}", "", f"> **关键词：{keywords}**", "", "**发生了什么**", "", item.get("what_happened") or item.get("summary") or "待人工补充。", "", "**为什么重要**", "", item.get("why_it_matters") or "待人工补充：内容包未提供影响说明。", "", "**普通人需要注意什么**", "", item.get("reader_action") or "待人工补充：内容包未提供读者行动建议。", "", f"> **小清提醒：** {item.get('editor_note') or '发布前请结合原文补充准确、克制的提醒。'}"]
+            lines += ["", "---", "", f"## {numerals[index-1] if index<=len(numerals) else index}、{item.get('title','')}", "", "<!-- role:keywords -->", f"> **关键词：{keywords}**", "", "<!-- role:section-label -->", "**发生了什么**", "", item.get("what_happened") or item.get("summary") or "待人工补充。", "", "<!-- role:section-label -->", "**为什么重要**", "", item.get("why_it_matters") or "待人工补充：内容包未提供影响说明。", "", "<!-- role:section-label -->", "**普通人需要注意什么**", "", item.get("reader_action") or "待人工补充：内容包未提供读者行动建议。", "", "<!-- role:editor-note -->", f"> **小清提醒：** {item.get('editor_note') or '发布前请结合原文补充准确、克制的提醒。'}"]
         follow_up=editorial.get("follow_up") or [shorten(item.get("title",""),28) for item in items[:3]]
         lines += ["", "## 今天值得关注", "", *[f"- {text}" for text in follow_up], "", "## 信息来源与动态说明", ""]
         for index,item in enumerate(items,1):
@@ -280,21 +280,34 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
     label = "昨日坐标" if payload["content_type"] == "daily-news" else "开源坐标"
     title=next((line[2:].strip() for line in markdown.splitlines() if line.startswith("# ")),"微信公众号审核包")
     blocks = []
+    pending_role = None
     for raw in markdown.splitlines():
         line = raw.strip()
         if not line: continue
+        role_match = re.fullmatch(r"<!-- role:([a-z-]+) -->", line)
+        if role_match:
+            pending_role = role_match.group(1)
+            continue
         if line.startswith("!["):
             match = re.match(r"!\[([^]]*)\]\(([^)]+)\)", line)
             src = data_uri(image_dir / Path(match.group(2)).name)
             blocks.append(f'<img src="{src}" alt="{html.escape(match.group(1))}" style="display:block;width:100%;height:auto;margin:24px 0;border-radius:10px">'); continue
         if line == "---": blocks.append(f'<div style="height:1px;background:{primary}22;margin:34px 0"></div>'); continue
         if line.startswith("# "): continue
-        if line.startswith("## "): blocks.append(f'<section style="margin:34px 0 18px"><div style="width:36px;height:4px;margin-bottom:10px;border-radius:2px;background:{primary}"></div><h2 style="font-size:21px;line-height:1.55;color:{ink};margin:0;font-weight:800">{inline(line[3:],primary)}</h2></section>'); continue
-        if line.startswith("> "): blocks.append(f'<blockquote style="margin:20px 0;padding:16px 18px;background:{bg};border:0;border-radius:8px;color:{primary};font-size:15px;line-height:1.8">{inline(line[2:],primary)}</blockquote>'); continue
-        if line.startswith("- "): blocks.append(f'<p style="font-size:16px;line-height:1.9;color:#334E68;margin:7px 0 7px 18px;text-indent:-18px">•　{inline(line[2:],primary)}</p>'); continue
+        if line.startswith("## "): blocks.append(f'<section style="margin:30px 0 16px"><div style="width:36px;height:4px;margin-bottom:10px;border-radius:2px;background:{primary}"></div><h2 style="font-size:22px;line-height:1.5;color:{ink};margin:0;font-weight:800">{inline(line[3:],primary)}</h2></section>'); continue
+        if line.startswith("> "):
+            content=inline(line[2:],primary)
+            if pending_role == "time-window": blocks.append(f'<blockquote data-role="time-window" style="margin:18px 0;padding:14px 16px;border-left:4px solid {primary};background:{bg};border-radius:0 7px 7px 0;color:{ink};font-size:15px;line-height:1.8">{content}</blockquote>')
+            elif pending_role == "keywords": blocks.append(f'<p data-role="keywords" style="margin:10px 0 18px;padding:11px 14px;background:{bg};color:{primary};border-radius:6px;font-size:15px;line-height:1.7;font-weight:700">{content}</p>')
+            elif pending_role == "editor-note": blocks.append(f'<blockquote data-role="editor-note" style="margin:18px 0;padding:14px 16px;background:{bg};border:0;border-radius:7px;color:{ink};font-size:15px;line-height:1.8">{content}</blockquote>')
+            else: blocks.append(f'<blockquote style="margin:20px 0;padding:16px 18px;background:{bg};border:0;border-radius:8px;color:{primary};font-size:15px;line-height:1.8">{content}</blockquote>')
+            pending_role=None; continue
+        if line.startswith("- "): blocks.append(f'<p style="font-size:16px;line-height:1.75;color:#334E68;margin:6px 0 6px 18px;text-indent:-18px">•　{inline(line[2:],primary)}</p>'); continue
         if re.match(r"^\d+\. ",line): blocks.append(f'<p style="font-size:14px;line-height:1.8;color:#536875;margin:8px 0;overflow-wrap:anywhere">{inline(line,primary)}</p>'); continue
         if line.startswith("**"):
-            blocks.append(f'<p style="font-size:15px;line-height:1.85;color:#465C63;margin:7px 0;padding:8px 12px;background:{bg};border-radius:6px;overflow-wrap:anywhere">{inline(line,primary)}</p>'); continue
+            if pending_role == "section-label": blocks.append(f'<p data-role="section-label" style="margin:18px 0 6px;color:{ink};font-size:17px;line-height:1.7;font-weight:800;overflow-wrap:anywhere">{inline(line,primary)}</p>')
+            else: blocks.append(f'<p style="font-size:15px;line-height:1.85;color:#465C63;margin:7px 0;padding:8px 12px;background:{bg};border-radius:6px;overflow-wrap:anywhere">{inline(line,primary)}</p>')
+            pending_role=None; continue
         blocks.append(f'<p style="font-size:16px;line-height:1.95;color:#31474F;margin:12px 0;text-align:justify;overflow-wrap:anywhere">{inline(line,primary)}</p>')
     notice = "" if payload["status"] == "ready_for_human_review" else '<div style="max-width:740px;margin:18px auto;padding:12px;background:#FFF2CC;color:#6B5415">输入内容仍需人工核验，请勿直接发布。</div>'
     cover=data_uri(image_dir/"横版封面.png")
