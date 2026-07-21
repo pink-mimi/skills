@@ -37,7 +37,7 @@ python scripts/run.py all --input content-package.json --output-root outputs --t
 
 ## 稳定重排
 
-研究 Skill 负责联网更新内容；本 Skill 只负责渲染已有内容包。同一内容包、模板版本与主题重复运行，结构和排版保持一致。每次输出的 `render-manifest.json` 会记录模板及主题版本。
+研究 Skill 负责联网更新内容；本 Skill 只负责渲染已有内容包。新闻提示标题会根据条目内容稳定选择；同一内容包、模板版本与主题重复运行时，提示标题、结构和排版保持一致。每次输出的 `render-manifest.json` 会记录模板及主题版本。
 
 ## 安装要求
 
