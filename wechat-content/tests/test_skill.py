@@ -114,6 +114,16 @@ class WechatContentTests(unittest.TestCase):
             self.assertIn("许可证",page)
             self.assertIn("images/项目-01.png",(out/"公众号成稿.md").read_text(encoding="utf-8"))
 
+    def test_github_render_does_not_use_news_weekday_visuals(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out=self.build("github-hot-content-package.json",temp)
+            page=(out/"微信版.html").read_text(encoding="utf-8")
+            manifest=json.loads((out/"render-manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["content_template"],"github-hot")
+            self.assertNotIn("weekday",manifest.get("visual_variant","").lower())
+            self.assertIn("开源坐标",page)
+            self.assertNotIn("昨日新闻",page)
+
     def test_cover_is_composed_and_versioned(self):
         with tempfile.TemporaryDirectory() as temp:
             out=self.build("daily-news-content-package.json",temp)
