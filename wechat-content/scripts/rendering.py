@@ -264,7 +264,8 @@ def build_article(payload: dict):
         numerals="一二三四五六七八九十"
         for index, item in enumerate(items, 1):
             keywords="｜".join(item.get("keywords") or [item.get("category","新闻")])
-            lines += ["", "---", "", f"## {numerals[index-1] if index<=len(numerals) else index}、{item.get('title','')}", "", "<!-- role:keywords -->", f"> **关键词：{keywords}**", "", "<!-- role:section-label -->", "**发生了什么**", "", item.get("what_happened") or item.get("summary") or "待人工补充。", "", "<!-- role:section-label -->", "**为什么重要**", "", item.get("why_it_matters") or "待人工补充：内容包未提供影响说明。", "", "<!-- role:section-label -->", "**普通人需要注意什么**", "", item.get("reader_action") or "待人工补充：内容包未提供读者行动建议。", "", "<!-- role:editor-note -->", f"> **小清提醒：** {item.get('editor_note') or '发布前请结合原文补充准确、克制的提醒。'}"]
+            reminder_label=choose_news_reminder_label(item)
+            lines += ["", "---", "", f"## {numerals[index-1] if index<=len(numerals) else index}、{item.get('title','')}", "", "<!-- role:keywords -->", f"> **关键词：{keywords}**", "", "<!-- role:section-label -->", "**发生了什么**", "", item.get("what_happened") or item.get("summary") or "待人工补充。", "", "<!-- role:section-label -->", "**为什么重要**", "", item.get("why_it_matters") or "待人工补充：内容包未提供影响说明。", "", "<!-- role:section-label -->", "**普通人需要注意什么**", "", item.get("reader_action") or "待人工补充：内容包未提供读者行动建议。", "", "<!-- role:editor-note -->", f"> **{reminder_label}：** {item.get('editor_note') or '发布前请结合原文补充准确、克制的提醒。'}"]
         follow_up=editorial.get("follow_up") or [shorten(item.get("title",""),28) for item in items[:3]]
         lines += ["", "## 今天值得关注", "", *[f"- {text}" for text in follow_up], "", "## 信息来源与动态说明", ""]
         for index,item in enumerate(items,1):

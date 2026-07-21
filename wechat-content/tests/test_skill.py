@@ -198,4 +198,15 @@ class WechatContentTests(unittest.TestCase):
             choose_news_reminder_label(default_item),
             choose_news_reminder_label(default_item),
         )
+
+    def test_news_render_uses_contextual_reminder_and_preserves_note(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = self.build("daily-news-content-package.json", temp)
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            page = (out / "微信版.html").read_text(encoding="utf-8")
+            self.assertIn("与你有关：", article)
+            self.assertIn("先确认自己是否属于适用人群，再安排办理。", article)
+            self.assertIn('data-role="editor-note"', page)
+            self.assertNotIn("小清提醒", article + page)
+
 if __name__=="__main__": unittest.main()
