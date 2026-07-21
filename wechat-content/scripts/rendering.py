@@ -28,15 +28,31 @@ NEWS_REMINDER_RULES = (
     ("与你有关", ("政策", "民生", "教育", "医疗", "消费", "就业", "社保", "公共服务")),
 )
 
+NEWS_NOTICE_RULES = (
+    (
+        ("weather", "天气", "降雨", "暴雨", "台风", "灾害", "地震", "交通", "安全", "应急", "预警"),
+        "天气、灾害、交通和公共安全信息可能持续更新，请关注属地权威预警与最新通报。",
+    ),
+    (
+        ("finance", "财经", "市场", "交易", "金融", "经济数据"),
+        "市场数据可能随交易、统计周期和统计口径变化，请以权威机构最新数据为准。",
+    ),
+    (
+        ("politics", "政策", "法规", "办法", "条例", "主管部门"),
+        "政策内容及执行安排可能继续完善，请以主管部门正式文件和实际执行安排为准。",
+    ),
+    (
+        ("争议", "传闻", "谣言", "辟谣", "数据存疑", "信息不完整", "尚未证实"),
+        "争议和未证实信息仍可能变化，请关注后续权威核实。",
+    ),
+)
+
 
 def choose_news_reminder_label(item: dict) -> str:
     fields = [
         item.get("category", ""),
         item.get("title", ""),
         item.get("summary", ""),
-        item.get("what_happened", ""),
-        item.get("why_it_matters", ""),
-        item.get("reader_action", ""),
         *(item.get("keywords") or []),
     ]
     haystack = " ".join(str(value) for value in fields).lower()
@@ -44,6 +60,18 @@ def choose_news_reminder_label(item: dict) -> str:
         if any(term.lower() in haystack for term in terms):
             return label
     return "值得留意"
+
+
+def build_news_notice(items: list[dict]) -> str:
+    fields = []
+    for item in items:
+        fields.extend((item.get("category", ""), item.get("title", ""), item.get("summary", "")))
+        fields.extend(item.get("keywords") or [])
+    haystack = " ".join(str(value) for value in fields).lower()
+    notices = [notice for terms, notice in NEWS_NOTICE_RULES if any(term.lower() in haystack for term in terms)]
+    if not notices:
+        return "本文依据公开资料整理，相关信息请以原始来源最新内容为准。"
+    return "本文依据公开资料整理。" + "".join(notices)
 
 
 def font(size: int, bold: bool = False):

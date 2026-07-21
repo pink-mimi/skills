@@ -185,9 +185,9 @@ class WechatContentTests(unittest.TestCase):
             ({"keywords": ["传闻", "辟谣"]}, "边界说明"),
             ({"category": "society", "title": "暴雨交通预警"}, "实用提醒"),
             ({"summary": "相关部门仍在持续通报进展"}, "接下来关注"),
-            ({"what_happened": "公共服务政策公布"}, "与你有关"),
-            ({"why_it_matters": "信息不完整，但伴随台风预警"}, "边界说明"),
-            ({"reader_action": "请注意公共安全"}, "实用提醒"),
+            ({"title": "公共服务政策公布"}, "与你有关"),
+            ({"summary": "信息不完整，但伴随台风预警"}, "边界说明"),
+            ({"keywords": ["公共安全"]}, "实用提醒"),
             ({"category": "sports", "keywords": ["比赛"]}, "值得留意"),
         ]
         for item, expected in cases:
@@ -197,6 +197,38 @@ class WechatContentTests(unittest.TestCase):
         self.assertEqual(
             choose_news_reminder_label(default_item),
             choose_news_reminder_label(default_item),
+        )
+
+    def test_news_reminder_label_ignores_action_and_editor_note_keywords(self):
+        from rendering import choose_news_reminder_label
+        item = {
+            "category": "international",
+            "title": "联合声明发布",
+            "keywords": ["合作"],
+            "summary": "各方公布合作方向。",
+            "reader_action": "关注后续安全通报。",
+            "editor_note": "这不代表规则立即改变。",
+        }
+        self.assertEqual(choose_news_reminder_label(item), "值得留意")
+
+    def test_dynamic_news_notice_matches_selected_topics(self):
+        from rendering import build_news_notice
+        items = [
+            {"category": "society", "title": "强降雨预警", "keywords": ["天气", "灾害"]},
+            {"category": "finance", "title": "市场数据公布", "keywords": ["市场"]},
+            {"category": "politics", "title": "政策发布", "keywords": ["政策"]},
+        ]
+        notice = build_news_notice(items)
+        self.assertIn("权威预警", notice)
+        self.assertIn("统计口径", notice)
+        self.assertIn("正式文件", notice)
+        self.assertNotIn("人工审核", notice)
+
+    def test_dynamic_news_notice_has_neutral_fallback(self):
+        from rendering import build_news_notice
+        self.assertEqual(
+            build_news_notice([{"category": "sports", "title": "比赛结束", "keywords": ["比赛"]}]),
+            "本文依据公开资料整理，相关信息请以原始来源最新内容为准。",
         )
 
     def test_news_render_uses_contextual_reminder_and_preserves_note(self):
