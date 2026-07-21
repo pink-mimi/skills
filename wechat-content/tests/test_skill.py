@@ -178,4 +178,24 @@ class WechatContentTests(unittest.TestCase):
             self.assertIn("输入内容仍需人工核验",(out/"微信版.html").read_text(encoding="utf-8"))
             manifest=json.loads((out/"render-manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["input_status"],"needs_review")
+
+    def test_news_reminder_label_matches_content_and_has_stable_default(self):
+        from rendering import choose_news_reminder_label
+        cases = [
+            ({"keywords": ["传闻", "辟谣"]}, "边界说明"),
+            ({"category": "society", "title": "暴雨交通预警"}, "实用提醒"),
+            ({"summary": "相关部门仍在持续通报进展"}, "接下来关注"),
+            ({"what_happened": "公共服务政策公布"}, "与你有关"),
+            ({"why_it_matters": "信息不完整，但伴随台风预警"}, "边界说明"),
+            ({"reader_action": "请注意公共安全"}, "实用提醒"),
+            ({"category": "sports", "keywords": ["比赛"]}, "值得留意"),
+        ]
+        for item, expected in cases:
+            with self.subTest(item=item):
+                self.assertEqual(choose_news_reminder_label(item), expected)
+        default_item = {"category": "sports", "keywords": ["比赛"]}
+        self.assertEqual(
+            choose_news_reminder_label(default_item),
+            choose_news_reminder_label(default_item),
+        )
 if __name__=="__main__": unittest.main()

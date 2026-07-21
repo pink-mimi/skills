@@ -21,6 +21,30 @@ PALETTES = {
     "clean-grid": ("#F5FBFC", "#173F49", "#2A8FA1", "#F1A23D"),
 }
 
+NEWS_REMINDER_RULES = (
+    ("边界说明", ("争议", "传闻", "谣言", "辟谣", "数据存疑", "信息不完整", "尚未证实")),
+    ("实用提醒", ("天气", "降雨", "暴雨", "台风", "灾害", "地震", "交通", "安全", "应急", "预警")),
+    ("接下来关注", ("后续", "仍在", "持续", "进展", "通报", "待落地", "尚未公布")),
+    ("与你有关", ("政策", "民生", "教育", "医疗", "消费", "就业", "社保", "公共服务")),
+)
+
+
+def choose_news_reminder_label(item: dict) -> str:
+    fields = [
+        item.get("category", ""),
+        item.get("title", ""),
+        item.get("summary", ""),
+        item.get("what_happened", ""),
+        item.get("why_it_matters", ""),
+        item.get("reader_action", ""),
+        *(item.get("keywords") or []),
+    ]
+    haystack = " ".join(str(value) for value in fields).lower()
+    for label, terms in NEWS_REMINDER_RULES:
+        if any(term.lower() in haystack for term in terms):
+            return label
+    return "值得留意"
+
 
 def font(size: int, bold: bool = False):
     candidates = [
