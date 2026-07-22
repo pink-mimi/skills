@@ -1,7 +1,7 @@
 import importlib.util, json, subprocess, sys, tempfile, time, unittest
 from pathlib import Path
 
-SKILL=Path(__file__).resolve().parents[1]; FIXTURE=SKILL.parent/"daily-news-wechat/tests/fixtures/raw-news.json"
+SKILL=Path(__file__).resolve().parents[1]; FIXTURE=SKILL/"tests/fixtures/raw-news.json"
 SPEC=importlib.util.spec_from_file_location("daily_news_research_run",SKILL/"scripts/run.py"); run=importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(run)
 class DailyNewsResearchTests(unittest.TestCase):
     def test_domestic_digest_rejects_unrelated_foreign_items(self):

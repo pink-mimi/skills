@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 SKILL=Path(__file__).resolve().parents[1]
-FIXTURE=SKILL.parent/"daily-news-wechat/tests/fixtures/raw-news.json"
+FIXTURE=SKILL/"tests/fixtures/raw-news.json"
 
 
 class ReportsAndModesTests(unittest.TestCase):

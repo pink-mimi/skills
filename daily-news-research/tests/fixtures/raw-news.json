@@ -1,0 +1,17 @@
+{
+  "fetched_at": "2026-07-19T06:20:00+08:00",
+  "errors": [],
+  "items": [
+    {"title":"国务院发布重要民生政策一","source":"中国政府网","link":"https://example.com/1","category":"politics","published_at":"2026-07-18T06:00:00+08:00","summary":"全国民生政策正式发布，关系公共服务。"},
+    {"title":"多地启动重大防汛应急响应","source":"新华社","link":"https://example.com/2","category":"public-safety","published_at":"2026-07-18T08:00:00+08:00","summary":"多地发布预警并启动救援准备，提醒居民注意安全出行。"},
+    {"title":"国家统计局发布经济运行数据","source":"国家统计局","link":"https://example.com/3","category":"finance","published_at":"2026-07-18T09:00:00+08:00","summary":"最新经济数据正式发布，涉及就业与消费。"},
+    {"title":"人工智能产业应用取得新突破","source":"人民网","link":"https://example.com/4","category":"tech","published_at":"2026-07-18T10:00:00+08:00","summary":"科技产业发布新成果，关注应用与安全。"},
+    {"title":"教育部门启动全国专项行动","source":"央视新闻","link":"https://example.com/5","category":"society","published_at":"2026-07-18T11:00:00+08:00","summary":"教育领域专项行动启动，关系学生与家庭。"},
+    {"title":"全国交通服务推出便民新措施","source":"中国新闻网","link":"https://example.com/6","category":"society","published_at":"2026-07-18T12:00:00+08:00","summary":"交通服务发布新措施，方便公众出行。"},
+    {"title":"金融监管部门发布风险提示","source":"官方金融监管部门","link":"https://example.com/7","category":"finance","published_at":"2026-07-18T13:00:00+08:00","summary":"官方发布金融风险提示，提醒消费者保护资金安全。"},
+    {"title":"国产航天项目完成重要试验","source":"新华社","link":"https://example.com/8","category":"tech","published_at":"2026-07-18T14:00:00+08:00","summary":"航天项目取得阶段性突破。"},
+    {"title":"区域公共医疗服务正式升级","source":"人民网","link":"https://example.com/9","category":"society","published_at":"2026-07-18T15:00:00+08:00","summary":"医疗服务升级，关系居民就医。"},
+    {"title":"国务院发布重要民生政策一 最新消息","source":"人民网","link":"https://example.com/10","category":"politics","published_at":"2026-07-18T06:05:00+08:00","summary":"同一政策的后续报道。"},
+    {"title":"没有可靠时间的新闻","source":"未知来源","link":"https://example.com/11","category":"general","published_at":null,"summary":"应进入待核验区。"}
+  ]
+}
