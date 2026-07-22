@@ -136,7 +136,9 @@ def build(raw, run_at, config):
     if not base_ready: risks.append("候选数量、类别覆盖或成功来源不足")
     if incomplete: risks.append(f"{len(incomplete)} 条新闻缺少发生了什么、为什么重要、读者行动或提醒等深度字段")
     return {"schema_version":1,"content_type":"daily-news","package_id":f"daily-news-{run_at.astimezone(BJT):%Y-%m-%d}","run_at":run_at.isoformat(),"status":"ready_for_human_review" if ready else "needs_review","window":{"start":start.isoformat(),"end":end.isoformat(),"boundary":"left_closed_right_open"},"collection":meta,"editorial":raw.get("editorial",{}),"items":chosen,"sources":[{"name":x.get("source"),"url":x.get("url")} for x in chosen],"risks":risks,"review_items":review}
-def target(root, run_at): return Path(root)/"daily-news"/run_at.astimezone(BJT).date().isoformat()
+def target(root, run_at, fixture=False):
+    namespace="test-fixtures/daily-news" if fixture else "daily-news"
+    return Path(root)/namespace/run_at.astimezone(BJT).date().isoformat()
 def source_report(raw,package):
     meta=raw.get("meta",{}); configured=int(meta.get("configured_sources",0)); successful=int(meta.get("successful_sources",0)); rate=f"{successful/configured:.1%}" if configured else "离线输入，未统计"
     source_counts={}; category_counts={}
@@ -196,7 +198,14 @@ def archive_revision(out, names):
     for path in existing: shutil.copy2(path,revision/path.name)
     return revision
 def main():
-    p=argparse.ArgumentParser(); p.add_argument("command",choices=("collect","build","verify","all","query","sources")); p.add_argument("--config",type=Path,default=ROOT/"assets/default-config.json"); p.add_argument("--input",type=Path); p.add_argument("--output-root",type=Path,default=Path.cwd()); p.add_argument("--run-at"); p.add_argument("--mode",choices=("stable","refresh","rebuild"),default="stable"); p.add_argument("--category",default="hot"); p.add_argument("--keyword"); p.add_argument("--limit",type=int,default=10); p.add_argument("--detail",type=int,default=100); p.add_argument("--format",dest="output_format",choices=("text","json"),default="text"); a=p.parse_args(); config=load(a.config); run_at=datetime.fromisoformat(a.run_at).astimezone(BJT) if a.run_at else datetime.now(BJT); out=target(a.output_root,run_at); raw_path=out/"raw-news.json"; package_path=out/"content-package.json"
+    p=argparse.ArgumentParser(); p.add_argument("command",choices=("collect","build","verify","all","query","sources")); p.add_argument("--config",type=Path,default=ROOT/"assets/default-config.json"); p.add_argument("--input",type=Path,help="仅供 query 读取离线查询数据"); p.add_argument("--fixture-input",type=Path,help="仅供测试，输出隔离到 test-fixtures"); p.add_argument("--output-root",type=Path,default=Path.cwd()); p.add_argument("--run-at"); p.add_argument("--mode",choices=("stable","refresh","rebuild"),default="stable"); p.add_argument("--category",default="hot"); p.add_argument("--keyword"); p.add_argument("--limit",type=int,default=10); p.add_argument("--detail",type=int,default=100); p.add_argument("--format",dest="output_format",choices=("text","json"),default="text"); a=p.parse_args(); config=load(a.config); run_at=datetime.fromisoformat(a.run_at).astimezone(BJT) if a.run_at else datetime.now(BJT)
+    if a.command!="query" and a.input:
+        raise SystemExit("--input 仅供 query；正式 collect/build/all 不接受外部输入，请使用联网 refresh 或已有快照 rebuild")
+    if a.fixture_input and a.command in ("query","sources","verify"):
+        raise SystemExit("--fixture-input 仅供 collect/build/all/rebuild 测试")
+    if a.fixture_input and a.mode=="refresh":
+        raise SystemExit("refresh 必须联网采集，不能与 --fixture-input 同时使用")
+    fixture=bool(a.fixture_input); out=target(a.output_root,run_at,fixture=fixture); raw_path=out/"raw-news.json"; package_path=out/"content-package.json"
     if a.command=="sources":
         catalog=source_catalog(config); print(json.dumps(catalog,ensure_ascii=False,indent=2) if a.output_format=="json" else "\n".join(f"{category}: {', '.join(x['name'] for x in sources)}" for category,sources in catalog.items())); return
     if a.command=="query":
@@ -205,14 +214,17 @@ def main():
         raw=load(a.input) if a.input else collect_modern(config,run_at,categories=None if a.category=="hot" else {a.category}); rows=query_items(raw.get("items",raw if isinstance(raw,list) else []),a.category,a.keyword,max(1,a.limit),a.detail); print(json.dumps(rows,ensure_ascii=False,indent=2) if a.output_format=="json" else format_query(rows)); return
     if a.mode=="rebuild" and not raw_path.exists(): raise SystemExit("rebuild 需要已有原始快照 raw-news.json")
     if a.mode=="refresh" and a.command in ("collect","build","all"): archive_revision(out,("raw-news.json","content-package.json"))
-    if a.command in ("collect","all") and a.mode!="rebuild" and (a.mode=="refresh" or not raw_path.exists()): save(raw_path, load(a.input) if a.input else collect_modern(config,run_at))
+    if a.command in ("collect","all") and a.mode!="rebuild" and (a.mode=="refresh" or not raw_path.exists()): save(raw_path, load(a.fixture_input) if a.fixture_input else collect_modern(config,run_at))
     if a.command in ("build","all"):
-        if a.command=="build" and a.mode=="refresh" and a.input: save(raw_path,load(a.input))
-        if not raw_path.exists() and a.input and a.mode!="rebuild": save(raw_path,load(a.input))
+        if not raw_path.exists() and a.fixture_input and a.mode!="rebuild": save(raw_path,load(a.fixture_input))
         if not raw_path.exists(): raise SystemExit("缺少原始快照 raw-news.json")
         raw=load(raw_path); package,queue,excluded=prepare_research(raw,run_at,config); package["snapshot"]={"mode":a.mode,"file":raw_path.name,"sha256":hashlib.sha256(raw_path.read_bytes()).hexdigest(),"refresh_recommended":a.mode=="rebuild" or bool(raw.get("errors"))}
+        package["execution"]={"kind":"test_fixture" if fixture else "production","external_input_used":fixture}
+        if fixture:
+            package["status"]="needs_review"
+            package["risks"].append("本次使用测试 fixture，不得作为正式新闻审核包")
         if a.mode=="rebuild": package["risks"].append("本次为离线重建，未重新联网核验，发布前建议 refresh")
-        save(package_path,package); save(out/"verification-queue.json",queue); save(out/"source-health.json",{"meta":raw.get("meta",{}),"sources":raw.get("source_health",[])}); save(out/"excluded-news.json",excluded); write(out/"source-report.md",tiered_report(raw,package,queue,excluded)); update_health_history(Path(a.output_root)/"daily-news/source-health-history.json",raw.get("source_health",[]),run_at)
+        save(package_path,package); save(out/"verification-queue.json",queue); save(out/"source-health.json",{"meta":raw.get("meta",{}),"sources":raw.get("source_health",[])}); save(out/"excluded-news.json",excluded); write(out/"source-report.md",tiered_report(raw,package,queue,excluded)); history_root=Path(a.output_root)/("test-fixtures/daily-news" if fixture else "daily-news"); update_health_history(history_root/"source-health-history.json",raw.get("source_health",[]),run_at)
     if a.command in ("verify","all"):
         path=package_path
         if not path.exists(): raise SystemExit("缺少 content-package.json")

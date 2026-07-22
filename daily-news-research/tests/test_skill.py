@@ -102,11 +102,11 @@ class DailyNewsResearchTests(unittest.TestCase):
 
     def test_offline_content_package(self):
         with tempfile.TemporaryDirectory() as temp:
-            result=subprocess.run([sys.executable,str(SKILL/"scripts/run.py"),"all","--input",str(FIXTURE),"--output-root",temp,"--run-at","2026-07-19T06:20:00+08:00"],capture_output=True,text=True)
+            result=subprocess.run([sys.executable,str(SKILL/"scripts/run.py"),"all","--fixture-input",str(FIXTURE),"--output-root",temp,"--run-at","2026-07-19T06:20:00+08:00"],capture_output=True,text=True)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-            data=json.loads((Path(temp)/"daily-news/2026-07-19/content-package.json").read_text(encoding="utf-8"))
+            data=json.loads((Path(temp)/"test-fixtures/daily-news/2026-07-19/content-package.json").read_text(encoding="utf-8"))
             self.assertEqual((data["schema_version"],data["content_type"]),(1,"daily-news")); self.assertNotIn("wechat_html",data)
-            report=(Path(temp)/"daily-news/2026-07-19/source-report.md")
+            report=(Path(temp)/"test-fixtures/daily-news/2026-07-19/source-report.md")
             self.assertTrue(report.exists())
             report_text=report.read_text(encoding="utf-8")
             self.assertIn("采集成功率",report_text)

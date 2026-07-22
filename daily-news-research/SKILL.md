@@ -45,4 +45,6 @@ python scripts/run.py sources --format json
 - `--mode refresh`：重新采集，并把上一版原始快照和内容包保存到 `revisions/revision-NN/`。
 - `--mode rebuild`：不联网，只根据已有原始快照重新筛选；缺少快照时停止。
 
+正式的 `collect`、`build` 和 `all` 禁止使用 `--input`。`--input` 仅供 `query` 做离线查询；自动化测试必须显式使用 `--fixture-input`，其结果隔离写入 `test-fixtures/daily-news/`，强制标记 `needs_review`，不得覆盖正式审核包。`refresh` 必须联网采集，不能与任何 fixture 输入同时使用。
+
 每次构建同时生成 `source-report.md`，列出采集平台、成功率、失败来源、候选数量和类别分布。读取详细来源边界时打开 `references/source-catalog.md`。
