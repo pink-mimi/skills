@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-import argparse, hashlib, html, json, re, shutil, urllib.request
+import argparse, hashlib, html, json, re, shutil, sys, urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from xml.etree import ElementTree as ET
+
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+import pipeline as research
 
 BJT = timezone(timedelta(hours=8))
 ROOT = Path(__file__).resolve().parents[1]
@@ -68,6 +71,9 @@ def collect(config,run_at,opener=urllib.request.urlopen,categories=None):
         if error: errors.append(error)
         else: successful+=1
     return {"fetched_at":run_at.isoformat(),"meta":{"configured_sources":len(sources),"successful_sources":successful,"failed_sources":len(errors)},"items":items,"errors":errors}
+
+def collect_modern(config,run_at,categories=None):
+    return research.collect_sources(config,run_at,categories=categories)
 def query_items(items,category="hot",keyword=None,limit=10,detail=100):
     rows=[]; needle=(keyword or "").casefold()
     for value in items:
@@ -140,6 +146,47 @@ def source_report(raw,package):
     if raw.get("errors"): lines += ["","## 失败来源","",*[f"- {x.get('source')}：{x.get('error')}" for x in raw["errors"]]]
     lines += ["","## 边界说明","","采集成功率只表示本次配置来源的请求结果，不代表新闻覆盖率或事实准确率达到 100%。发布前仍须打开原文进行人工核验。"]
     return "\n".join(lines)
+
+def tiered_report(raw,package,queue,excluded):
+    health=raw.get("source_health",[]); meta=raw.get("meta",{}); total=max(1,len(package.get("items",[])))
+    tier_counts={}; organizations=set()
+    for row in health:
+        tier_counts[row.get("tier","未标记")]=tier_counts.get(row.get("tier","未标记"),0)+1
+        if row.get("status") in research.SUCCESS_STATUSES: organizations.add(row.get("organization"))
+    primary=sum(1 for row in package.get("items",[]) if row.get("primary_sources") or row.get("source_role")=="primary")
+    lines=[source_report(raw,package),"","## 来源阶梯","",*[f"- 第 {tier} 阶梯：{count} 个配置来源" for tier,count in sorted(tier_counts.items(),key=lambda value:str(value[0]))],"","## 机构多样性","",f"- 成功机构：{int(meta.get('successful_organizations',len(organizations)))}",f"- 核验队列：{len(queue)} 个事件",f"- 排除记录：{len(excluded)} 条","","## 官方原文覆盖率","",f"- 入选新闻：{primary}/{len(package.get('items',[]))}（{primary/total:.1%}）"]
+    return "\n".join(lines)
+
+def prepare_research(raw,run_at,config):
+    start,end=window(run_at,config); accepted,rejected=research.filter_time_window(raw.get("items",[]),start,end)
+    enriched=[]
+    for value in accepted:
+        row=dict(value); scope,_=research.classify_scope(row); row["geographic_scope"]=row.get("geographic_scope",scope)
+        row["verification_status"]=row.get("verification_status") or ("verified" if row.get("source_role")=="primary" else "unverified")
+        enriched.append(row)
+    clusters=research.cluster_events(enriched); queue=research.build_verification_queue(clusters,config)
+    by_event={entry["event_id"]:entry for entry in queue}; candidates=[]
+    for cluster in clusters:
+        lead=dict(cluster["sources"][0]); verification=by_event.get(cluster["event_id"],{})
+        lead.update({"event_id":cluster["event_id"],"verification_status":verification.get("verification_status","unverified"),"primary_sources":verification.get("primary_sources",[]),"discovery_sources":verification.get("discovery_sources",[])})
+        candidates.append(lead)
+    selected=research.select_verified_items(candidates,config,raw.get("meta",{}),run_at)
+    package=build({**raw,"items":selected["items"]},run_at,config)
+    package["status"]=selected["status"]
+    package["risks"]=list(dict.fromkeys(package.get("risks",[])+selected["risks"]))
+    package["review_items"]=package.get("review_items",[])+rejected
+    return package,queue,rejected+selected["excluded"]
+
+def update_health_history(path,health,run_at):
+    history=load(path) if path.exists() else {"schema_version":1,"sources":{}}
+    for row in health:
+        key=f"{row.get('organization','未知')}|{row.get('url','')}"; previous=history["sources"].get(key,{"runs":0,"successes":0,"failures":0,"consecutive_failures":0,"total_elapsed_ms":0})
+        success=row.get("status") in research.SUCCESS_STATUSES
+        previous["runs"]+=1; previous["successes"]+=int(success); previous["failures"]+=int(not success); previous["consecutive_failures"]=0 if success else previous["consecutive_failures"]+1; previous["total_elapsed_ms"]+=int(row.get("elapsed_ms",0)); previous["average_elapsed_ms"]=round(previous["total_elapsed_ms"]/previous["runs"]); previous["last_status"]=row.get("status"); previous["last_checked_at"]=run_at.isoformat()
+        if success: previous["last_success_at"]=run_at.isoformat()
+        if row.get("status") in {"success_with_items","success_no_items"}: previous["last_parse_success_at"]=run_at.isoformat()
+        history["sources"][key]=previous
+    history["updated_at"]=run_at.isoformat(); save(path,history); return history
 def archive_revision(out, names):
     existing=[out/name for name in names if (out/name).exists()]
     if not existing: return None
@@ -155,15 +202,17 @@ def main():
     if a.command=="query":
         catalog=source_catalog(config)
         if a.category not in catalog: raise SystemExit(f"不支持的类别：{a.category}")
-        raw=load(a.input) if a.input else collect(config,run_at,categories=None if a.category=="hot" else {a.category}); rows=query_items(raw.get("items",raw if isinstance(raw,list) else []),a.category,a.keyword,max(1,a.limit),a.detail); print(json.dumps(rows,ensure_ascii=False,indent=2) if a.output_format=="json" else format_query(rows)); return
+        raw=load(a.input) if a.input else collect_modern(config,run_at,categories=None if a.category=="hot" else {a.category}); rows=query_items(raw.get("items",raw if isinstance(raw,list) else []),a.category,a.keyword,max(1,a.limit),a.detail); print(json.dumps(rows,ensure_ascii=False,indent=2) if a.output_format=="json" else format_query(rows)); return
     if a.mode=="rebuild" and not raw_path.exists(): raise SystemExit("rebuild 需要已有原始快照 raw-news.json")
     if a.mode=="refresh" and a.command in ("collect","build","all"): archive_revision(out,("raw-news.json","content-package.json"))
-    if a.command in ("collect","all") and a.mode!="rebuild" and (a.mode=="refresh" or not raw_path.exists()): save(raw_path, load(a.input) if a.input else collect(config,run_at))
+    if a.command in ("collect","all") and a.mode!="rebuild" and (a.mode=="refresh" or not raw_path.exists()): save(raw_path, load(a.input) if a.input else collect_modern(config,run_at))
     if a.command in ("build","all"):
         if a.command=="build" and a.mode=="refresh" and a.input: save(raw_path,load(a.input))
         if not raw_path.exists() and a.input and a.mode!="rebuild": save(raw_path,load(a.input))
         if not raw_path.exists(): raise SystemExit("缺少原始快照 raw-news.json")
-        raw=load(raw_path); package=build(raw,run_at,config); package["snapshot"]={"mode":a.mode,"file":raw_path.name,"sha256":hashlib.sha256(raw_path.read_bytes()).hexdigest()}; save(package_path,package); write(out/"source-report.md",source_report(raw,package))
+        raw=load(raw_path); package,queue,excluded=prepare_research(raw,run_at,config); package["snapshot"]={"mode":a.mode,"file":raw_path.name,"sha256":hashlib.sha256(raw_path.read_bytes()).hexdigest(),"refresh_recommended":a.mode=="rebuild" or bool(raw.get("errors"))}
+        if a.mode=="rebuild": package["risks"].append("本次为离线重建，未重新联网核验，发布前建议 refresh")
+        save(package_path,package); save(out/"verification-queue.json",queue); save(out/"source-health.json",{"meta":raw.get("meta",{}),"sources":raw.get("source_health",[])}); save(out/"excluded-news.json",excluded); write(out/"source-report.md",tiered_report(raw,package,queue,excluded)); update_health_history(Path(a.output_root)/"daily-news/source-health-history.json",raw.get("source_health",[]),run_at)
     if a.command in ("verify","all"):
         path=package_path
         if not path.exists(): raise SystemExit("缺少 content-package.json")
@@ -171,7 +220,8 @@ def main():
         if payload.get("schema_version")!=1: errors.append("不支持的 schema_version")
         if payload.get("content_type")!="daily-news": errors.append("content_type 错误")
         if not payload.get("items"): errors.append("没有入选新闻")
-        if not (out/"source-report.md").exists(): errors.append("缺少 source-report.md")
+        for required in ("source-report.md","verification-queue.json","source-health.json","excluded-news.json"):
+            if not (out/required).exists(): errors.append(f"缺少 {required}")
         if errors: raise SystemExit("；".join(errors))
         print("OK")
 if __name__=="__main__": main()
