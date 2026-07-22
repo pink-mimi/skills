@@ -110,7 +110,7 @@ def build(raw, run_at, config):
         published=parse_time(row.get("published_at")); key=re.sub(r"\W","",str(row.get("title","")).lower())
         if not key or not row["url"] or not published: review.append(row); continue
         if not start <= published < end or key in seen: continue
-        if config.get("selection",{}).get("scope")=="domestic" and not domestic_relevant(row):
+        if config.get("selection",{}).get("scope") in {"domestic","china-national"} and not domestic_relevant(row):
             row["review_reason"]="与国内日报定位缺少直接关联"
             review.append(row); continue
         seen.add(key); row["published_at"]=published.isoformat(); eligible.append(row)

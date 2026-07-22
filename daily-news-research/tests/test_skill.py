@@ -32,6 +32,32 @@ class DailyNewsResearchTests(unittest.TestCase):
         self.assertGreaterEqual(len(enabled),6)
         self.assertGreaterEqual(len({x["category"] for x in enabled}),4)
 
+    def test_default_sources_declare_tiered_source_contract(self):
+        config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
+        required={"organization","tier","role","parser","daily_default","canonical_domains","max_response_bytes"}
+        defaults=[source for source in config["sources"] if source.get("daily_default")]
+        self.assertTrue(defaults)
+        for source in defaults:
+            self.assertFalse(required-set(source),source["name"])
+        self.assertEqual(config["schema_version"],2)
+        self.assertEqual({source["tier"] for source in defaults},{1,2})
+
+    def test_default_daily_sources_cover_five_independent_organizations(self):
+        config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
+        defaults=[source for source in config["sources"] if source.get("daily_default")]
+        self.assertGreaterEqual(len({source["organization"] for source in defaults}),5)
+        self.assertTrue(any(source["role"]=="primary" for source in defaults))
+        world=[source for source in defaults if source["category"]=="world"]
+        self.assertLessEqual(len(world),1)
+        self.assertEqual(config["selection"]["maximum_international"],1)
+
+    def test_collection_and_selection_limits_are_explicit(self):
+        config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
+        self.assertEqual(config["collection"]["maximum_candidates"],50)
+        self.assertEqual(config["verification"]["maximum_queue"],15)
+        self.assertGreaterEqual(config["health"]["minimum_successful_organizations"],5)
+        self.assertEqual(config["selection"]["maximum_local"],1)
+
     def test_collection_runs_sources_concurrently_and_records_failures(self):
         feed=b"<rss><channel><item><title>test</title><link>https://example.com/a</link><pubDate>Sun, 19 Jul 2026 03:00:00 GMT</pubDate></item></channel></rss>"
         class Response:
