@@ -4,8 +4,9 @@ import hashlib
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor,as_completed
-from datetime import datetime,timezone
+from datetime import datetime,timedelta,timezone
 from difflib import SequenceMatcher
+from email.utils import parsedate_to_datetime
 
 import safe_fetch
 import source_adapters
@@ -19,8 +20,39 @@ def _parse_time(value):
     try:
         parsed=datetime.fromisoformat(str(value).replace("Z","+00:00"))
     except ValueError:
-        return None
+        try: parsed=parsedate_to_datetime(str(value))
+        except (TypeError,ValueError): return None
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _collection_window(config,run_at):
+    hour,minute=map(int,config.get("window",{}).get("end_time","06:00").split(":"))
+    end=run_at.replace(hour=hour,minute=minute,second=0,microsecond=0)
+    return end-timedelta(hours=int(config.get("window",{}).get("duration_hours",24))),end
+
+
+def _time_bucket(row,start,end):
+    moment=_parse_time(row.get("published_at")) or _parse_time(row.get("updated_at"))
+    if moment is None: return "invalid_time"
+    localized=moment.astimezone(start.tzinfo)
+    if localized<start: return "too_old"
+    if localized>=end: return "too_new"
+    return "in_window"
+
+
+def _expand_archive_sources(sources,start,end):
+    expanded=list(sources); day=start.date(); last=(end-timedelta(microseconds=1)).date()
+    while day<=last:
+        for source in sources:
+            template=source.get("archive_url_template"); parser=source.get("archive_parser")
+            if not template or not parser: continue
+            clone=dict(source)
+            clone["name"]=f"{source.get('name')}·日期归档·{day.isoformat()}"
+            clone["url"]=template.format(year=f"{day.year:04d}",month=f"{day.month:02d}",day=f"{day.day:02d}",monthday=f"{day.month:02d}{day.day:02d}",date=day.isoformat())
+            clone["parser"]=parser; clone["archive_date"]=day.isoformat(); clone["generated_archive_source"]=True
+            expanded.append(clone)
+        day+=timedelta(days=1)
+    return expanded
 
 
 def filter_time_window(rows,start,end):
@@ -188,7 +220,9 @@ def select_verified_items(rows,config,collection_meta,run_at):
 
 
 def collect_sources(config,run_at,fetcher=None,categories=None):
+    window_start,window_end=_collection_window(config,run_at)
     sources=[source for source in config.get("sources",[]) if source.get("enabled",True) and ((source.get("category") in categories) if categories else source.get("daily_default",True))]
+    sources=_expand_archive_sources(sources,window_start,window_end)
     settings=config.get("collection",{})
     maximum=int(settings.get("maximum_candidates",50))
     workers=max(1,min(int(settings.get("max_workers",6)),len(sources) or 1))
@@ -206,10 +240,11 @@ def collect_sources(config,run_at,fetcher=None,categories=None):
         if status=="success":
             parsed=source_adapters.parse(result.payload,source)
             status=parsed.status; items=parsed.items; error=parsed.error
+        window_count=sum(_time_bucket(row,window_start,window_end)=="in_window" for row in items)
         health={
             "name":source.get("name"),"organization":source.get("organization",source.get("name")),
             "url":source.get("url"),"tier":source.get("tier"),"role":source.get("role"),
-            "status":status,"attempts":attempts,"elapsed_ms":round((time.monotonic()-started)*1000),"candidate_count":len(items),
+            "status":status,"attempts":attempts,"elapsed_ms":round((time.monotonic()-started)*1000),"candidate_count":len(items),"window_candidate_count":window_count,
         }
         if error: health["error"]=error
         return index,items,health
@@ -221,7 +256,10 @@ def collect_sources(config,run_at,fetcher=None,categories=None):
     results.sort(key=lambda row:row[0])
     items=[]; health=[]; source_rows=[]
     for _,rows,state in results:
-        health.append(state); source_rows.append(rows)
+        health.append(state)
+        buckets={name:[] for name in ("in_window","invalid_time","too_new","too_old")}
+        for row in rows: buckets[_time_bucket(row,window_start,window_end)].append(row)
+        source_rows.append(buckets["in_window"]+buckets["invalid_time"]+buckets["too_new"]+buckets["too_old"])
     position=0
     while len(items)<maximum:
         added=False
@@ -234,12 +272,16 @@ def collect_sources(config,run_at,fetcher=None,categories=None):
     successful=[row for row in health if row["status"] in SUCCESS_STATUSES]
     organizations={row["organization"] for row in successful}
     errors=[{"source":row["name"],"url":row["url"],"status":row["status"],"error":row.get("error","")} for row in health if row["status"] not in SUCCESS_STATUSES]
+    time_counts={name:0 for name in ("in_window","too_new","too_old","invalid_time")}
+    for _,rows,_ in results:
+        for row in rows: time_counts[_time_bucket(row,window_start,window_end)]+=1
     return {
         "fetched_at":run_at.isoformat(),
         "meta":{
             "configured_sources":len(sources),"successful_sources":len(successful),
             "successful_organizations":len(organizations),"failed_sources":len(errors),
             "candidate_limit_reached":sum(row["candidate_count"] for row in health)>maximum,
+            "time_window_counts":time_counts,
         },
         "items":items,"errors":errors,"source_health":health,
     }

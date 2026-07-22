@@ -17,6 +17,39 @@ class Result:
 
 
 class CollectionPipelineTests(unittest.TestCase):
+    def test_window_items_are_prioritized_before_global_candidate_cap(self):
+        newer="".join(f"<item><title>Newer update {index:02d}</title><link>https://example.com/new/{index}</link><pubDate>Wed, 22 Jul 2026 12:{index%60:02d}:00 +0800</pubDate></item>" for index in range(50))
+        in_window="".join(f"<item><title>Window update {index:02d}</title><link>https://example.com/window/{index}</link><pubDate>Tue, 21 Jul 2026 12:{index:02d}:00 +0800</pubDate></item>" for index in range(5))
+        feed=f"<rss><channel>{newer}{in_window}</channel></rss>".encode()
+        source={"name":"source","organization":"org","url":"https://example.com/feed","parser":"rss_atom","category":"general","tier":2,"role":"discovery","daily_default":True,"enabled":True}
+        config={"window":{"end_time":"06:00","duration_hours":24},"collection":{"max_workers":1,"maximum_candidates":50},"sources":[source]}
+        raw=pipeline.collect_sources(config,datetime.fromisoformat("2026-07-22T06:00:00+08:00"),fetcher=lambda source:Result("success",feed))
+        window_titles=[row["title"] for row in raw["items"] if row["title"].startswith("Window update")]
+        self.assertEqual(len(window_titles),5)
+        self.assertEqual(raw["meta"]["time_window_counts"],{"in_window":5,"too_new":50,"too_old":0,"invalid_time":0})
+
+    def test_rfc2822_feed_dates_are_valid_for_time_window_filtering(self):
+        rows=[{"title":"Window news","published_at":"Tue, 21 Jul 2026 18:46:08 +0800"}]
+        accepted,rejected=pipeline.filter_time_window(rows,datetime.fromisoformat("2026-07-21T06:00:00+08:00"),datetime.fromisoformat("2026-07-22T06:00:00+08:00"))
+        self.assertEqual(len(accepted),1)
+        self.assertEqual(rejected,[])
+
+    def test_archive_template_fetches_both_calendar_days_crossed_by_window(self):
+        source={"name":"中国新闻网·滚动","organization":"中国新闻网","url":"https://www.chinanews.com/rss.xml","parser":"rss_atom","archive_parser":"chinanews_archive","archive_url_template":"https://www.chinanews.com.cn/scroll-news/{year}/{monthday}/news.shtml","category":"general","tier":2,"role":"discovery","daily_default":True,"enabled":True}
+        requested=[]
+        def fetcher(value):
+            requested.append(value["url"])
+            if value.get("archive_date")=="2026-07-21":
+                return Result("success",b'<html><body><a href="/a">National policy update for public services</a><span>7-21 20:10</span></body></html>')
+            if value.get("archive_date")=="2026-07-22":
+                return Result("success",b'<html><body><a href="/b">National transport safety response update</a><span>7-22 05:10</span></body></html>')
+            return Result("success",b'<rss><channel></channel></rss>')
+        config={"window":{"end_time":"06:00","duration_hours":24},"collection":{"max_workers":3,"maximum_candidates":50},"sources":[source]}
+        raw=pipeline.collect_sources(config,datetime.fromisoformat("2026-07-22T06:00:00+08:00"),fetcher=fetcher)
+        self.assertIn("https://www.chinanews.com.cn/scroll-news/2026/0721/news.shtml",requested)
+        self.assertIn("https://www.chinanews.com.cn/scroll-news/2026/0722/news.shtml",requested)
+        self.assertEqual(raw["meta"]["time_window_counts"]["in_window"],2)
+
     def test_collection_distinguishes_source_statuses_and_organizations(self):
         feed=b"<rss><channel><item><title>National public service update</title><link>https://example.com/a</link><pubDate>Tue, 21 Jul 2026 10:00:00 +0800</pubDate></item></channel></rss>"
         sources=[]

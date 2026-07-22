@@ -72,6 +72,15 @@ class SourceAdapterTests(unittest.TestCase):
         self.assertNotIn("<script>",result.items[0]["title"])
         self.assertNotIn("alert(1)",result.items[0]["title"])
 
+    def test_chinanews_archive_uses_archive_date_for_partial_timestamps(self):
+        source={"name":"中国新闻网归档","organization":"中国新闻网","category":"general","role":"discovery","tier":2,"parser":"chinanews_archive","url":"https://www.chinanews.com.cn/scroll-news/2026/0721/news.shtml","archive_date":"2026-07-21"}
+        payload='''<html><body><ul><li><div class="dd_lm">[<a href=/cj/gd.shtml>财经</a>]</div><div class="dd_bt"><a href="/cn/2026/07-21/1.shtml">全国医保基金监管工作发布新进展</a></div><div class="dd_time">7-21 21:15</div></li></ul></body></html>'''.encode()
+        result=source_adapters.parse(payload,source)
+        self.assertEqual(result.status,"success_with_items")
+        self.assertEqual(result.items[0]["published_at"],"2026-07-21T21:15:00+08:00")
+        self.assertEqual(result.items[0]["category"],"finance")
+
+
 
 if __name__=="__main__":
     unittest.main()

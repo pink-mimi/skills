@@ -82,6 +82,42 @@ def _parse_html(payload,source):
     return ParseResult("success_no_items" if recognized else "parse_error",[],"" if recognized else "页面存在 HTML，但未识别到新闻列表结构")
 
 
+def _parse_chinanews_archive(payload,source):
+    text=payload.decode("utf-8","replace")
+    archive_date=str(source.get("archive_date") or "")
+    if not re.fullmatch(r"20\d{2}-\d{2}-\d{2}",archive_date):
+        return ParseResult("parse_error",[],"归档来源缺少 archive_date")
+    year=archive_date[:4]; rows=[]; seen=set(); current_category=source.get("category","general")
+    category_map={"时政":"politics","财经":"finance","社会":"society","国际":"world","教育":"education","健康":"health","法治":"legal","科技":"tech","体育":"sports","文化":"culture","湾区":"society","华人":"society","同心":"society"}
+    for block in re.findall(r"<li\b[^>]*>([\s\S]*?)</li>",text,flags=re.I):
+        category_match=re.search(r'class=["\']dd_lm["\'][\s\S]*?<a\b[^>]*>([\s\S]*?)</a>',block,flags=re.I)
+        title_match=re.search(r'class=["\']dd_bt["\'][\s\S]*?<a\b[^>]*href=(?:["\']([^"\']+)["\']|([^\s>]+))[^>]*>([\s\S]*?)</a>',block,flags=re.I)
+        time_match=re.search(r'class=["\']dd_time["\'][^>]*>\s*(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})',block,flags=re.I)
+        if not title_match or not time_match: continue
+        title=_clean(title_match.group(3)); url=title_match.group(1) or title_match.group(2)
+        if len(title)<8 or title in seen: continue
+        month,day,hour,minute=map(int,time_match.groups())
+        item=_base_item(source,title,url,f"{year}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:00+08:00")
+        category=_clean(category_match.group(1)) if category_match else ""
+        item["category"]=category_map.get(category,source.get("category","general"))
+        seen.add(title); rows.append(item)
+    if rows: return ParseResult("success_with_items",rows,"")
+    pattern=re.compile(r'<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>([\s\S]*?)</a>(?=([\s\S]{0,240}))',re.I)
+    for url,label,tail in pattern.findall(text):
+        title=_clean(label)
+        if title in category_map:
+            current_category=category_map[title]; continue
+        if len(title)<8 or title in seen or url.lower().startswith(("javascript:","mailto:","#")): continue
+        match=re.search(r"(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})",_clean(tail))
+        if not match: continue
+        month,day,hour,minute=map(int,match.groups())
+        published=f"{year}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:00+08:00"
+        item=_base_item(source,title,url,published); item["category"]=current_category
+        seen.add(title); rows.append(item)
+    if rows: return ParseResult("success_with_items",rows,"")
+    return ParseResult("parse_error",[],"归档页未识别到带时间的新闻条目")
+
+
 PARSERS={
     "rss_atom":_parse_feed,
     "gov_policy":_parse_html,
@@ -90,6 +126,7 @@ PARSERS={
     "mem_release":_parse_html,
     "cma_warning":_parse_html,
     "media_web":_parse_html,
+    "chinanews_archive":_parse_chinanews_archive,
 }
 
 

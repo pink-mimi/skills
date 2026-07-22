@@ -156,7 +156,8 @@ def tiered_report(raw,package,queue,excluded):
         tier_counts[row.get("tier","未标记")]=tier_counts.get(row.get("tier","未标记"),0)+1
         if row.get("status") in research.SUCCESS_STATUSES: organizations.add(row.get("organization"))
     primary=sum(1 for row in package.get("items",[]) if row.get("primary_sources") or row.get("source_role")=="primary")
-    lines=[source_report(raw,package),"","## 来源阶梯","",*[f"- 第 {tier} 阶梯：{count} 个配置来源" for tier,count in sorted(tier_counts.items(),key=lambda value:str(value[0]))],"","## 机构多样性","",f"- 成功机构：{int(meta.get('successful_organizations',len(organizations)))}",f"- 核验队列：{len(queue)} 个事件",f"- 排除记录：{len(excluded)} 条","","## 官方原文覆盖率","",f"- 入选新闻：{primary}/{len(package.get('items',[]))}（{primary/total:.1%}）"]
+    time_counts=meta.get("time_window_counts",{})
+    lines=[source_report(raw,package),"","## 时间窗口诊断","",f"- 窗口内：{int(time_counts.get('in_window',0))} 条",f"- 晚于窗口：{int(time_counts.get('too_new',0))} 条",f"- 早于窗口：{int(time_counts.get('too_old',0))} 条",f"- 时间无效：{int(time_counts.get('invalid_time',0))} 条","","## 来源阶梯","",*[f"- 第 {tier} 阶梯：{count} 个配置来源" for tier,count in sorted(tier_counts.items(),key=lambda value:str(value[0]))],"","## 机构多样性","",f"- 成功机构：{int(meta.get('successful_organizations',len(organizations)))}",f"- 核验队列：{len(queue)} 个事件",f"- 排除记录：{len(excluded)} 条","","## 官方原文覆盖率","",f"- 入选新闻：{primary}/{len(package.get('items',[]))}（{primary/total:.1%}）"]
     return "\n".join(lines)
 
 def prepare_research(raw,run_at,config):
