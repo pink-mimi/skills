@@ -31,7 +31,7 @@ class CollectionPipelineTests(unittest.TestCase):
 
     def test_parse_error_and_success_no_items_are_not_counted_as_item_success(self):
         sources=[
-            {"name":"empty","organization":"empty","url":"https://example.com/empty","parser":"media_web","category":"general","tier":2,"role":"discovery","daily_default":True,"enabled":True,"payload":b"<html><body></body></html>"},
+            {"name":"empty","organization":"empty","url":"https://example.com/empty","parser":"media_web","category":"general","tier":2,"role":"discovery","daily_default":True,"enabled":True,"payload":b"<html><body><ul></ul></body></html>"},
             {"name":"changed","organization":"changed","url":"https://example.com/changed","parser":"media_web","category":"general","tier":2,"role":"discovery","daily_default":True,"enabled":True,"payload":b"not html"},
         ]
         config={"collection":{"max_workers":2,"maximum_candidates":50},"sources":sources}
@@ -47,6 +47,29 @@ class CollectionPipelineTests(unittest.TestCase):
         raw=pipeline.collect_sources({"collection":{"max_workers":2,"maximum_candidates":50},"sources":[source]},datetime.now().astimezone(),fetcher=lambda source:Result("success",feed))
         self.assertEqual(len(raw["items"]),50)
         self.assertTrue(raw["meta"]["candidate_limit_reached"])
+
+    def test_transient_timeout_is_retried_once(self):
+        feed=b"<rss><channel><item><title>National public service update</title><link>https://example.com/a</link><pubDate>Tue, 21 Jul 2026 10:00:00 +0800</pubDate></item></channel></rss>"
+        source={"name":"source","organization":"org","url":"https://example.com/feed","parser":"rss_atom","category":"general","tier":2,"role":"discovery","daily_default":True,"enabled":True}
+        attempts=[]
+        def fetcher(value):
+            attempts.append(value["url"])
+            return Result("timeout",error="temporary") if len(attempts)==1 else Result("success",feed)
+        raw=pipeline.collect_sources({"collection":{"max_workers":1,"maximum_candidates":50,"retry_count":1},"sources":[source]},datetime.now().astimezone(),fetcher=fetcher)
+        self.assertEqual(len(attempts),2)
+        self.assertEqual(raw["source_health"][0]["status"],"success_with_items")
+
+    def test_candidate_cap_round_robins_across_sources_for_breadth(self):
+        def feed(prefix):
+            items="".join(f"<item><title>{prefix} national update {index:02d}</title><link>https://example.com/{prefix}/{index}</link><pubDate>Tue, 21 Jul 2026 10:00:00 +0800</pubDate></item>" for index in range(40))
+            return f"<rss><channel>{items}</channel></rss>".encode()
+        sources=[
+            {"name":"alpha","organization":"alpha","url":"https://example.com/alpha","parser":"rss_atom","category":"politics","tier":1,"role":"primary","daily_default":True,"enabled":True},
+            {"name":"beta","organization":"beta","url":"https://example.com/beta","parser":"rss_atom","category":"society","tier":2,"role":"discovery","daily_default":True,"enabled":True},
+        ]
+        raw=pipeline.collect_sources({"collection":{"max_workers":2,"maximum_candidates":50},"sources":sources},datetime.now().astimezone(),fetcher=lambda source:Result("success",feed(source["name"])))
+        counts={name:sum(row["source"]==name for row in raw["items"]) for name in ("alpha","beta")}
+        self.assertEqual(counts,{"alpha":25,"beta":25})
 
 
 if __name__=="__main__": unittest.main()

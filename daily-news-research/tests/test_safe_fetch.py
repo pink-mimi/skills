@@ -1,4 +1,5 @@
 import importlib.util
+import gzip
 import unittest
 from pathlib import Path
 
@@ -69,6 +70,18 @@ class SafeFetchTests(unittest.TestCase):
             opener=lambda request,timeout:Response(),
             resolver=lambda host:["127.0.0.1"] if host=="127.0.0.1" else ["93.184.216.34"])
         self.assertEqual(result.status,"blocked")
+
+    def test_gzip_response_is_decompressed_before_parsing(self):
+        payload=gzip.compress(b"<html><body>news</body></html>")
+        class Response:
+            status=200
+            headers={"Content-Type":"text/html","Content-Encoding":"gzip"}
+            def read(self,size=-1): return payload
+            def __enter__(self): return self
+            def __exit__(self,*args): return False
+            def geturl(self): return "https://www.mem.gov.cn/gk/"
+        result=safe_fetch.fetch({"url":"https://www.mem.gov.cn/gk/","canonical_domains":["mem.gov.cn"]},opener=lambda request,timeout:Response(),resolver=lambda host:["93.184.216.34"])
+        self.assertEqual(result.payload,b"<html><body>news</body></html>")
 
 
 if __name__=="__main__":

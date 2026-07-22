@@ -59,7 +59,7 @@ def _parse_html(payload,source):
     if not re.search(r"<html|<body|<a\b",text,re.I):
         return ParseResult("parse_error",[],"响应不像可解析的 HTML 页面")
     rows=[]; seen=set()
-    pattern=re.compile(r'<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>([\s\S]*?)</a>([\s\S]{0,160})',re.I)
+    pattern=re.compile(r'<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>([\s\S]*?)</a>(?=([\s\S]{0,1200}))',re.I)
     for url,label,tail in pattern.findall(text):
         title=_clean(label)
         if len(title)<8 or title in seen or url.lower().startswith(("javascript:","mailto:","#")):
@@ -75,7 +75,11 @@ def _parse_html(payload,source):
         rows.append(_base_item(source,title,url,published))
         if len(rows)>=50:
             break
-    return ParseResult("success_with_items" if rows else "success_no_items",rows,"")
+    if rows: return ParseResult("success_with_items",rows,"")
+    article_links=sum(1 for _,label,_ in pattern.findall(text) if len(_clean(label))>=8)
+    if article_links: return ParseResult("parse_error",[],"发现文章链接，但未提取到可靠发布时间")
+    recognized=bool(re.search(r"<ul\b|class=[\"'][^\"']*(?:list|news|content)",text,re.I))
+    return ParseResult("success_no_items" if recognized else "parse_error",[],"" if recognized else "页面存在 HTML，但未识别到新闻列表结构")
 
 
 PARSERS={

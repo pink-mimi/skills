@@ -193,11 +193,15 @@ def collect_sources(config,run_at,fetcher=None,categories=None):
     maximum=int(settings.get("maximum_candidates",50))
     workers=max(1,min(int(settings.get("max_workers",6)),len(sources) or 1))
     timeout=int(settings.get("timeout_seconds",10))
+    retry_count=max(0,int(settings.get("retry_count",0)))
     fetcher=fetcher or (lambda source:safe_fetch.fetch(source,timeout=timeout))
 
     def work(index,source):
         started=time.monotonic()
-        result=fetcher(source)
+        attempts=0
+        while True:
+            attempts+=1; result=fetcher(source)
+            if result.status not in {"timeout","fetch_error","rate_limited"} or attempts>retry_count: break
         status=result.status; items=[]; error=result.error
         if status=="success":
             parsed=source_adapters.parse(result.payload,source)
@@ -205,7 +209,7 @@ def collect_sources(config,run_at,fetcher=None,categories=None):
         health={
             "name":source.get("name"),"organization":source.get("organization",source.get("name")),
             "url":source.get("url"),"tier":source.get("tier"),"role":source.get("role"),
-            "status":status,"elapsed_ms":round((time.monotonic()-started)*1000),"candidate_count":len(items),
+            "status":status,"attempts":attempts,"elapsed_ms":round((time.monotonic()-started)*1000),"candidate_count":len(items),
         }
         if error: health["error"]=error
         return index,items,health
@@ -215,10 +219,18 @@ def collect_sources(config,run_at,fetcher=None,categories=None):
         futures=[pool.submit(work,index,source) for index,source in enumerate(sources)]
         for future in as_completed(futures): results.append(future.result())
     results.sort(key=lambda row:row[0])
-    items=[]; health=[]
+    items=[]; health=[]; source_rows=[]
     for _,rows,state in results:
-        health.append(state)
-        if len(items)<maximum: items.extend(rows[:maximum-len(items)])
+        health.append(state); source_rows.append(rows)
+    position=0
+    while len(items)<maximum:
+        added=False
+        for rows in source_rows:
+            if position<len(rows):
+                items.append(rows[position]); added=True
+                if len(items)>=maximum: break
+        if not added: break
+        position+=1
     successful=[row for row in health if row["status"] in SUCCESS_STATUSES]
     organizations={row["organization"] for row in successful}
     errors=[{"source":row["name"],"url":row["url"],"status":row["status"],"error":row.get("error","")} for row in health if row["status"] not in SUCCESS_STATUSES]

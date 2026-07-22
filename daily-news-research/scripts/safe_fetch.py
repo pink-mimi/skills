@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import ipaddress
+import gzip
 import socket
 import urllib.request
+import zlib
 from typing import NamedTuple
 from urllib.parse import urlparse
 
@@ -62,6 +64,14 @@ def fetch(source,opener=urllib.request.urlopen,resolver=_resolve,timeout=10):
                 return FetchResult("blocked",b"",final_url,"响应体超过安全上限","")
             headers=getattr(response,"headers",{})
             content_type=headers.get("Content-Type","") if hasattr(headers,"get") else ""
+            encoding=(headers.get("Content-Encoding","") if hasattr(headers,"get") else "").lower()
+            try:
+                if encoding=="gzip": payload=gzip.decompress(payload)
+                elif encoding=="deflate": payload=zlib.decompress(payload)
+            except (OSError,zlib.error) as exc:
+                return FetchResult("blocked",b"",final_url,f"压缩响应无法安全解包：{exc}",content_type)
+            if len(payload)>maximum:
+                return FetchResult("blocked",b"",final_url,"解压后响应体超过安全上限",content_type)
             return FetchResult("success",payload,final_url,"",content_type)
     except UnsafeUrlError as exc:
         return FetchResult("blocked",b"",url,str(exc),"")
