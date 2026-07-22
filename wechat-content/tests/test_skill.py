@@ -169,6 +169,23 @@ class WechatContentTests(unittest.TestCase):
             self.assertTrue(labels)
             self.assertTrue(all("background:" not in label for label in labels))
 
+    def test_news_information_cards_use_rounded_hierarchy_and_keyword_chips(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out=self.build("daily-news-content-package.json",temp)
+            page=(out/"微信版.html").read_text(encoding="utf-8")
+            manifest=json.loads((out/"render-manifest.json").read_text(encoding="utf-8"))
+            time_card=page.split('data-role="time-window"',1)[1].split("</blockquote>",1)[0]
+            keyword_card=page.split('data-role="keywords"',1)[1].split("</div>",1)[0]
+            note_card=page.split('data-role="editor-note"',1)[1].split("</blockquote>",1)[0]
+            self.assertIn("border-radius:10px",time_card)
+            self.assertIn("box-shadow:",time_card)
+            self.assertIn('data-role="keyword-label"',keyword_card)
+            self.assertGreaterEqual(keyword_card.count('data-role="keyword-chip"'),2)
+            self.assertIn("border-radius:999px",keyword_card)
+            self.assertIn("border-radius:10px",note_card)
+            self.assertIn("border:1px solid",note_card)
+            self.assertEqual(manifest["template_version"],"2.1.1")
+
     def test_incomplete_news_package_is_downgraded_to_needs_review(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
         fixture["items"][0].pop("why_it_matters")

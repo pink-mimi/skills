@@ -10,7 +10,7 @@ from rendering import build_article, build_html, render_images
 from news_visuals import choose_news_visual, valid_live_pair
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE_VERSION = "2.1.0"
+TEMPLATE_VERSION = "2.1.1"
 NEWS_REQUIRED_FIELDS = ("what_happened", "why_it_matters", "reader_action", "editor_note", "keywords")
 
 

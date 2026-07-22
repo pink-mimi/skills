@@ -388,9 +388,14 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
         if line.startswith("## "): blocks.append(f'<section style="margin:30px 0 16px"><div style="width:36px;height:4px;margin-bottom:10px;border-radius:2px;background:{primary}"></div><h2 style="font-size:22px;line-height:1.5;color:{ink};margin:0;font-weight:800">{inline(line[3:],primary)}</h2></section>'); continue
         if line.startswith("> "):
             content=inline(line[2:],primary)
-            if pending_role == "time-window": blocks.append(f'<blockquote data-role="time-window" style="margin:18px 0;padding:14px 16px;border-left:4px solid {primary};background:{bg};border-radius:0 7px 7px 0;color:{ink};font-size:15px;line-height:1.8">{content}</blockquote>')
-            elif pending_role == "keywords": blocks.append(f'<p data-role="keywords" style="margin:10px 0 18px;padding:11px 14px;background:{bg};color:{primary};border-radius:6px;font-size:15px;line-height:1.7;font-weight:700">{content}</p>')
-            elif pending_role == "editor-note": blocks.append(f'<blockquote data-role="editor-note" style="margin:18px 0;padding:14px 16px;background:{bg};border:0;border-radius:7px;color:{ink};font-size:15px;line-height:1.8">{content}</blockquote>')
+            if pending_role == "time-window": blocks.append(f'<blockquote data-role="time-window" style="margin:18px 0;padding:14px 16px;border:1px solid {primary}2E;border-left:4px solid {primary};background:{bg};border-radius:10px;box-shadow:0 4px 12px {primary}12;color:{ink};font-size:15px;line-height:1.8">{content}</blockquote>')
+            elif pending_role == "keywords":
+                keyword_text=re.sub(r"\*\*","",line[2:]).strip()
+                keyword_text=re.sub(r"^关键词[：:]?\s*","",keyword_text)
+                keyword_values=[value.strip() for value in re.split(r"[｜|]",keyword_text) if value.strip()]
+                chips="".join(f'<span data-role="keyword-chip" style="display:inline-block;margin:3px 6px 3px 0;padding:3px 10px;border:1px solid {primary}38;border-radius:999px;background:#fff;color:{primary};font-size:13px;line-height:1.7;font-weight:650">{html.escape(value)}</span>' for value in keyword_values)
+                blocks.append(f'<div data-role="keywords" style="margin:10px 0 20px;padding:11px 13px;border:1px solid {primary}26;border-radius:10px;background:{bg};box-shadow:0 3px 10px {primary}0D"><span data-role="keyword-label" style="display:inline-block;margin:3px 10px 3px 0;color:{ink};font-size:14px;line-height:1.7;font-weight:800">关键词</span>{chips}</div>')
+            elif pending_role == "editor-note": blocks.append(f'<blockquote data-role="editor-note" style="margin:18px 0;padding:14px 16px;background:{bg};border:1px solid {primary}26;border-left:4px solid {accent};border-radius:10px;box-shadow:0 4px 12px {primary}0D;color:{ink};font-size:15px;line-height:1.8">{content}</blockquote>')
             else: blocks.append(f'<blockquote style="margin:20px 0;padding:16px 18px;background:{bg};border:0;border-radius:8px;color:{primary};font-size:15px;line-height:1.8">{content}</blockquote>')
             pending_role=None; continue
         if line.startswith("原文地址："):
