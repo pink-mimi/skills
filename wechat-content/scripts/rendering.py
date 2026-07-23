@@ -143,6 +143,24 @@ def wrap_by_width(draw, text: str, text_font, max_width: int, max_lines: int = 2
     return lines[:max_lines]
 
 
+def fit_cover_title(draw, text: str, max_width: int, max_lines: int = 2, preferred_size: int = 39, minimum_size: int = 24):
+    """Fit a complete cover title. Cover titles must never be silently ellipsized."""
+    normalized=re.sub(r"\s+","",str(text or ""))
+    for size in range(preferred_size,minimum_size-1,-1):
+        title_font=font(size,True); lines=[]; current=""
+        for character in normalized:
+            candidate=current+character
+            if current and draw.textbbox((0,0),candidate,font=title_font)[2]>max_width:
+                lines.append(current); current=character
+            else:
+                current=candidate
+        if current: lines.append(current)
+        if len(lines)<=max_lines:
+            return lines,title_font
+    title_font=font(minimum_size,True)
+    return [normalized],title_font
+
+
 def draw_grid(draw, box, color, step=48):
     x0, y0, x1, y1 = box
     for x in range(x0, x1 + 1, step):
@@ -182,9 +200,8 @@ def cover_panel(size, title, kicker, palette, square=False, base_path=None):
     display_kicker = kicker if not square else kicker.split("·")[0].strip()
     draw.text((left, 58), display_kicker, font=font(24 if not square else 21, True), fill=primary)
     display_title = re.sub(r"\s+", "", title)
-    title_font = font(39 if not square else 34, True)
     panel_right = width - 42 if square else (int(width * 0.58) - 30 if base_path and Path(base_path).exists() else width - 42)
-    words = wrap_by_width(draw, display_title, title_font, panel_right - left, 2)
+    words,title_font = fit_cover_title(draw,display_title,panel_right-left,2,34 if square else 39,24)
     y = 112
     for line in words[:2]:
         draw.text((left, y), line, font=title_font, fill=ink)

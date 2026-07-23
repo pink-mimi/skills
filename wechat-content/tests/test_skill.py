@@ -8,6 +8,15 @@ ASSETS=SKILL/"assets"
 CONFIG=json.loads((ASSETS/"default-config.json").read_text(encoding="utf-8"))
 sys.path.insert(0,str(SKILL/"scripts"))
 class WechatContentTests(unittest.TestCase):
+    def test_cover_title_fitting_preserves_full_text_without_ellipsis(self):
+        from PIL import Image, ImageDraw
+        from rendering import fit_cover_title
+        title="昨天，这6件事值得关注"
+        draw=ImageDraw.Draw(Image.new("RGB",(900,383),"white"))
+        lines, _font=fit_cover_title(draw,title,430,max_lines=2,preferred_size=39,minimum_size=26)
+        self.assertEqual("".join(lines),title.replace(" ",""))
+        self.assertNotIn("…","".join(lines))
+
     def build(self, fixture, temp, extra=None):
         source=Path(fixture) if Path(fixture).is_absolute() else SKILL/"tests/fixtures"/fixture
         command=[sys.executable,str(SKILL/"scripts/run.py"),"all","--input",str(source),"--output-root",temp]
@@ -208,6 +217,17 @@ class WechatContentTests(unittest.TestCase):
             self.assertIn("disabled",button)
             self.assertIn('data-role="review-notice"',page)
             self.assertLess(page.index('data-role="review-notice"'),page.index('id="wechat-content"'))
+
+    def test_incomplete_news_reports_structure_only_not_validation_success(self):
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        fixture["items"][0].pop("why_it_matters")
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/"incomplete-status.json"
+            source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
+            result=subprocess.run([sys.executable,str(SKILL/"scripts/run.py"),"all","--input",str(source),"--output-root",temp],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+            self.assertIn("STRUCTURE_OK_CONTENT_NEEDS_REVIEW",result.stdout)
+            self.assertNotEqual(result.stdout.strip(),"OK")
 
     def test_complete_news_keeps_copy_enabled_without_review_notice(self):
         with tempfile.TemporaryDirectory() as temp:

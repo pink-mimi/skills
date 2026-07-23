@@ -1,4 +1,4 @@
 interface:
   display_name: "每日新闻研究"
   short_description: "阶梯采集官方与权威来源，核验前一日重要新闻"
-  default_prompt: "使用 $daily-news-research，按北京时间采集前一日新闻；以全国性国内新闻为主，建立官方核验队列并生成标准内容包。"
+  default_prompt: "使用 $daily-news-research，按北京时间采集前一日新闻；建立核验队列，逐条打开原文补齐发布字段，重新构建并确认状态为 ready_for_human_review 后再交给平台制作 Skill。"

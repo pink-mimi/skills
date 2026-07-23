@@ -4,6 +4,34 @@ from pathlib import Path
 SKILL=Path(__file__).resolve().parents[1]; FIXTURE=SKILL/"tests/fixtures/raw-news.json"
 SPEC=importlib.util.spec_from_file_location("daily_news_research_run",SKILL/"scripts/run.py"); run=importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(run)
 class DailyNewsResearchTests(unittest.TestCase):
+    def test_editorial_enrichment_merges_publishable_fields_by_url(self):
+        raw={"items":[{"title":"全国公共服务新安排","url":"https://example.com/news","source":"官方来源","category":"society","published_at":"2026-07-22T12:00:00+08:00"}]}
+        editorial={"items":[{"url":"https://example.com/news","what_happened":"主管部门公布了新的公共服务安排。","why_it_matters":"这会影响相关服务的办理方式。","reader_action":"办理前核对适用范围和开始时间。","editor_note":"具体执行以当地主管部门通知为准。","keywords":["公共服务","办理"],"verification_status":"verified","verified_at":"2026-07-23T05:30:00+08:00","primary_sources":[{"name":"官方来源","url":"https://example.com/news"}]}]}
+        merged=run.merge_editorial_enrichment(raw,editorial)
+        item=merged["items"][0]
+        for field in ("what_happened","why_it_matters","reader_action","editor_note","keywords"):
+            self.assertTrue(item[field],field)
+        self.assertEqual(item["verification_status"],"verified")
+
+    def test_editorial_workbench_lists_missing_fields_instead_of_claiming_completion(self):
+        queue=[{"event_id":"evt-1","title":"全国公共服务新安排","url":"https://example.com/news","category":"society"}]
+        workbench=run.build_editorial_workbench(queue)
+        self.assertEqual(workbench["status"],"awaiting_editorial_enrichment")
+        self.assertEqual(workbench["items"][0]["url"],"https://example.com/news")
+        self.assertIn("what_happened",workbench["items"][0]["missing_fields"])
+
+    def test_prepare_research_preserves_verified_editorial_enrichment(self):
+        config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
+        categories=("politics","finance","society","tech","public-safety")
+        items=[]
+        titles=("国务院公布公共服务安排","金融管理部门发布市场规则","全国就业服务出现新变化","工业领域发布技术规范","应急部门更新防灾预警")
+        for index,category in enumerate(categories):
+            items.append({"title":titles[index],"url":f"https://example.com/{index}","source":"权威媒体","organization":f"机构{index}","source_role":"discovery","category":category,"published_at":"2026-07-22T12:00:00+08:00","geographic_scope":"national","verification_status":"verified","verified_at":"2026-07-23T05:30:00+08:00","primary_sources":[{"name":"主管部门","url":f"https://official.example/{index}"}],"what_happened":"官方公布了新的安排。","why_it_matters":"相关规则将影响公众办理事务。","reader_action":"办理前核对适用范围。","editor_note":"具体执行以主管部门通知为准。","keywords":["公共事务"]})
+        raw={"items":items,"meta":{"successful_organizations":8},"source_health":[]}
+        package,_queue,_excluded=run.prepare_research(raw,run.datetime.fromisoformat("2026-07-23T06:00:00+08:00"),config)
+        self.assertEqual(package["status"],"ready_for_human_review",package.get("risks"))
+        self.assertTrue(all(item["verification_status"]=="verified" for item in package["items"]))
+
     def test_domestic_digest_rejects_unrelated_foreign_items(self):
         config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
         base={"published_at":"2026-07-19T12:00:00+08:00","summary":"摘要","what_happened":"事实","why_it_matters":"影响","reader_action":"建议","editor_note":"提醒","keywords":["关键词"]}
@@ -128,4 +156,11 @@ class DailyNewsResearchTests(unittest.TestCase):
         official=(SKILL/"references/official-source-directory.md").read_text(encoding="utf-8")
         self.assertIn("按类别触发",official)
         self.assertIn("仅允许官方域名",official)
+        skill=(SKILL/"SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("editorial-workbench.json",skill)
+        self.assertIn("--editorial-input",skill)
+        self.assertIn("不得交给 `wechat-content`",skill)
+        agent=(SKILL/"agents/openai.yaml").read_text(encoding="utf-8")
+        self.assertIn("补齐发布字段",agent)
+        self.assertIn("ready_for_human_review",agent)
 if __name__=="__main__": unittest.main()

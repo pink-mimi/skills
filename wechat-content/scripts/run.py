@@ -125,7 +125,7 @@ def main() -> None:
         write(out / "运行报告.md", f"# 运行报告\n\n- content_type: `{payload['content_type']}`\n- input_status: `{payload['status']}`\n- content_template: `{payload['content_type']}@{TEMPLATE_VERSION}`\n- theme: `{theme}@2.0.0`\n- image_mode: `{image_mode}`{visual_report}\n- 发布：仅生成审核包，未上传、未发布。")
     if args.command in ("verify", "all"):
         verify(out, payload)
-        print("OK")
+        print("OK" if payload["status"] == "ready_for_human_review" else "STRUCTURE_OK_CONTENT_NEEDS_REVIEW")
 
 
 if __name__ == "__main__":

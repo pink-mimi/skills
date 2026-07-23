@@ -109,6 +109,35 @@ def domestic_relevant(row):
     return any(marker in text for marker in markers)
 def editorial_complete(row,required):
     return all(row.get(field) and (not isinstance(row.get(field),list) or len(row[field])>0) for field in required)
+
+def merge_editorial_enrichment(raw, editorial):
+    """Merge agent-verified editorial fields without replacing collection evidence."""
+    allowed={"what_happened","why_it_matters","reader_action","editor_note","keywords","summary","verification_status","verified_at","primary_sources","background_sources","verification_notes","recheck_before_publish","china_relevance","china_relevance_reason","impact_level"}
+    enriched={}
+    for item in editorial.get("items",[]):
+        keys=(str(item.get("event_id") or "").strip(),str(item.get("url") or "").strip(),str(item.get("title") or "").strip())
+        for key in keys:
+            if key: enriched[key]=item
+    merged=dict(raw); merged["items"]=[]
+    for source in raw.get("items",[]):
+        row=dict(source)
+        match=next((enriched.get(str(row.get(key) or "").strip()) for key in ("event_id","url","title") if enriched.get(str(row.get(key) or "").strip())),None)
+        if match:
+            for key in allowed:
+                if key in match: row[key]=match[key]
+        merged["items"].append(row)
+    if editorial.get("editorial"): merged["editorial"]=dict(editorial["editorial"])
+    return merged
+
+def build_editorial_workbench(queue):
+    required=("what_happened","why_it_matters","reader_action","editor_note","keywords")
+    items=[]
+    for value in queue:
+        row={key:value.get(key) for key in ("event_id","title","url","category","verification_status","primary_sources","discovery_sources")}
+        row.update({field:value.get(field) or ([] if field=="keywords" else "") for field in required})
+        row["missing_fields"]=[field for field in required if not row.get(field)]
+        items.append(row)
+    return {"schema_version":1,"status":"awaiting_editorial_enrichment","instructions":"逐条打开原文核验，补齐编辑字段后使用 --editorial-input 重新 build。","items":items}
 def build(raw, run_at, config):
     start,end=window(run_at,config); seen=set(); eligible=[]; review=[]
     for item in raw.get("items",[]):
@@ -171,7 +200,13 @@ def prepare_research(raw,run_at,config):
     by_event={entry["event_id"]:entry for entry in queue}; candidates=[]
     for cluster in clusters:
         lead=dict(cluster["sources"][0]); verification=by_event.get(cluster["event_id"],{})
-        lead.update({"event_id":cluster["event_id"],"verification_status":verification.get("verification_status","unverified"),"primary_sources":verification.get("primary_sources",[]),"discovery_sources":verification.get("discovery_sources",[])})
+        preserved_verified=lead.get("verification_status")=="verified" and bool(lead.get("primary_sources"))
+        lead.update({
+            "event_id":cluster["event_id"],
+            "verification_status":"verified" if preserved_verified else verification.get("verification_status","unverified"),
+            "primary_sources":lead.get("primary_sources") or verification.get("primary_sources",[]),
+            "discovery_sources":lead.get("discovery_sources") or verification.get("discovery_sources",[]),
+        })
         candidates.append(lead)
     selected=research.select_verified_items(candidates,config,raw.get("meta",{}),run_at)
     package=build({**raw,"items":selected["items"]},run_at,config)
@@ -199,13 +234,15 @@ def archive_revision(out, names):
     for path in existing: shutil.copy2(path,revision/path.name)
     return revision
 def main():
-    p=argparse.ArgumentParser(); p.add_argument("command",choices=("collect","build","verify","all","query","sources")); p.add_argument("--config",type=Path,default=ROOT/"assets/default-config.json"); p.add_argument("--input",type=Path,help="仅供 query 读取离线查询数据"); p.add_argument("--fixture-input",type=Path,help="仅供测试，输出隔离到 test-fixtures"); p.add_argument("--output-root",type=Path,default=Path.cwd()); p.add_argument("--run-at"); p.add_argument("--mode",choices=("stable","refresh","rebuild"),default="stable"); p.add_argument("--category",default="hot"); p.add_argument("--keyword"); p.add_argument("--limit",type=int,default=10); p.add_argument("--detail",type=int,default=100); p.add_argument("--format",dest="output_format",choices=("text","json"),default="text"); a=p.parse_args(); config=load(a.config); run_at=datetime.fromisoformat(a.run_at).astimezone(BJT) if a.run_at else datetime.now(BJT)
+    p=argparse.ArgumentParser(); p.add_argument("command",choices=("collect","build","verify","all","query","sources")); p.add_argument("--config",type=Path,default=ROOT/"assets/default-config.json"); p.add_argument("--input",type=Path,help="仅供 query 读取离线查询数据"); p.add_argument("--editorial-input",type=Path,help="经原文核验后补齐的编辑字段 JSON，仅供 build/all"); p.add_argument("--fixture-input",type=Path,help="仅供测试，输出隔离到 test-fixtures"); p.add_argument("--output-root",type=Path,default=Path.cwd()); p.add_argument("--run-at"); p.add_argument("--mode",choices=("stable","refresh","rebuild"),default="stable"); p.add_argument("--category",default="hot"); p.add_argument("--keyword"); p.add_argument("--limit",type=int,default=10); p.add_argument("--detail",type=int,default=100); p.add_argument("--format",dest="output_format",choices=("text","json"),default="text"); a=p.parse_args(); config=load(a.config); run_at=datetime.fromisoformat(a.run_at).astimezone(BJT) if a.run_at else datetime.now(BJT)
     if a.command!="query" and a.input:
         raise SystemExit("--input 仅供 query；正式 collect/build/all 不接受外部输入，请使用联网 refresh 或已有快照 rebuild")
     if a.fixture_input and a.command in ("query","sources","verify"):
         raise SystemExit("--fixture-input 仅供 collect/build/all/rebuild 测试")
     if a.fixture_input and a.mode=="refresh":
         raise SystemExit("refresh 必须联网采集，不能与 --fixture-input 同时使用")
+    if a.editorial_input and a.command not in ("build","all"):
+        raise SystemExit("--editorial-input 仅供 build/all 使用")
     fixture=bool(a.fixture_input); out=target(a.output_root,run_at,fixture=fixture); raw_path=out/"raw-news.json"; package_path=out/"content-package.json"
     if a.command=="sources":
         catalog=source_catalog(config); print(json.dumps(catalog,ensure_ascii=False,indent=2) if a.output_format=="json" else "\n".join(f"{category}: {', '.join(x['name'] for x in sources)}" for category,sources in catalog.items())); return
@@ -219,13 +256,16 @@ def main():
     if a.command in ("build","all"):
         if not raw_path.exists() and a.fixture_input and a.mode!="rebuild": save(raw_path,load(a.fixture_input))
         if not raw_path.exists(): raise SystemExit("缺少原始快照 raw-news.json")
-        raw=load(raw_path); package,queue,excluded=prepare_research(raw,run_at,config); package["snapshot"]={"mode":a.mode,"file":raw_path.name,"sha256":hashlib.sha256(raw_path.read_bytes()).hexdigest(),"refresh_recommended":a.mode=="rebuild" or bool(raw.get("errors"))}
+        raw=load(raw_path)
+        if a.editorial_input:
+            raw=merge_editorial_enrichment(raw,load(a.editorial_input))
+        package,queue,excluded=prepare_research(raw,run_at,config); package["snapshot"]={"mode":a.mode,"file":raw_path.name,"sha256":hashlib.sha256(raw_path.read_bytes()).hexdigest(),"refresh_recommended":a.mode=="rebuild" or bool(raw.get("errors"))}
         package["execution"]={"kind":"test_fixture" if fixture else "production","external_input_used":fixture}
         if fixture:
             package["status"]="needs_review"
             package["risks"].append("本次使用测试 fixture，不得作为正式新闻审核包")
         if a.mode=="rebuild": package["risks"].append("本次为离线重建，未重新联网核验，发布前建议 refresh")
-        save(package_path,package); save(out/"verification-queue.json",queue); save(out/"source-health.json",{"meta":raw.get("meta",{}),"sources":raw.get("source_health",[])}); save(out/"excluded-news.json",excluded); write(out/"source-report.md",tiered_report(raw,package,queue,excluded)); history_root=Path(a.output_root)/("test-fixtures/daily-news" if fixture else "daily-news"); update_health_history(history_root/"source-health-history.json",raw.get("source_health",[]),run_at)
+        save(package_path,package); save(out/"verification-queue.json",queue); save(out/"editorial-workbench.json",build_editorial_workbench(queue)); save(out/"source-health.json",{"meta":raw.get("meta",{}),"sources":raw.get("source_health",[])}); save(out/"excluded-news.json",excluded); write(out/"source-report.md",tiered_report(raw,package,queue,excluded)); history_root=Path(a.output_root)/("test-fixtures/daily-news" if fixture else "daily-news"); update_health_history(history_root/"source-health-history.json",raw.get("source_health",[]),run_at)
     if a.command in ("verify","all"):
         path=package_path
         if not path.exists(): raise SystemExit("缺少 content-package.json")
@@ -233,7 +273,7 @@ def main():
         if payload.get("schema_version")!=1: errors.append("不支持的 schema_version")
         if payload.get("content_type")!="daily-news": errors.append("content_type 错误")
         if not payload.get("items"): errors.append("没有入选新闻")
-        for required in ("source-report.md","verification-queue.json","source-health.json","excluded-news.json"):
+        for required in ("source-report.md","verification-queue.json","editorial-workbench.json","source-health.json","excluded-news.json"):
             if not (out/required).exists(): errors.append(f"缺少 {required}")
         if errors: raise SystemExit("；".join(errors))
         print("OK")

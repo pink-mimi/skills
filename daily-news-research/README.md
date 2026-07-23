@@ -32,9 +32,18 @@ python scripts/run.py all `
   --output-root outputs
 ```
 
-4. 检查 `verification-queue.json` 中仍需打开的官方原文。
-5. 检查 `source-health.json`、`excluded-news.json` 和 `source-report.md`。
-6. 只有 `content-package.json` 的状态和事实都经人工确认后，才交给公众号或其他平台制作 Skill。
+4. 打开 `verification-queue.json` 推荐的原文，按 `editorial-workbench.json` 补齐每条新闻的事实、意义、读者提示、边界提醒和关键词。
+5. 把补齐结果另存为 `verified-editorial.json`，重新构建：
+
+```powershell
+python scripts/run.py build `
+  --run-at 2026-07-22T06:00:00+08:00 `
+  --output-root outputs `
+  --editorial-input work/verified-editorial.json
+```
+
+6. 检查 `source-health.json`、`excluded-news.json` 和 `source-report.md`。
+7. 只有 `content-package.json` 状态为 `ready_for_human_review`，才交给公众号或其他平台制作 Skill；`needs_review` 不能直接制作可复制正文。
 
 临时分类查询：
 
@@ -59,6 +68,7 @@ python scripts/run.py sources --format json
 daily-news/YYYY-MM-DD/
 ├── raw-news.json
 ├── verification-queue.json
+├── editorial-workbench.json
 ├── source-health.json
 ├── excluded-news.json
 ├── content-package.json
