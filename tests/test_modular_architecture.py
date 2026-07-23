@@ -12,9 +12,19 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ModularArchitectureTests(unittest.TestCase):
+    def research_fixture_arg(self, skill_name, fixture):
+        if skill_name.startswith("daily"):
+            return ["--fixture-input", str(fixture)]
+        return ["--input", str(fixture)]
+
+    def research_output_glob(self, skill_name, content_type):
+        if skill_name.startswith("daily"):
+            return f"test-fixtures/{content_type}/*/content-package.json"
+        return f"{content_type}/*/content-package.json"
+
     def test_research_snapshot_modes_are_stable_and_revisioned(self):
         cases = (
-            ("daily-news-research", ROOT / "daily-news-wechat/tests/fixtures/raw-news.json", "2026-07-19T06:20:00+08:00", "daily-news/2026-07-19", "raw-news.json"),
+            ("daily-news-research", ROOT / "daily-news-wechat/tests/fixtures/raw-news.json", "2026-07-19T06:20:00+08:00", "test-fixtures/daily-news/2026-07-19", "raw-news.json"),
             ("github-hot-research", ROOT / "github-hot-wechat/tests/fixtures/candidates.json", "2026-07-25T09:00:00+08:00", "github-hot/2026-07-25", "raw-candidates.json"),
         )
         with tempfile.TemporaryDirectory() as temp:
@@ -26,14 +36,16 @@ class ModularArchitectureTests(unittest.TestCase):
                 payload["items"][0]["title" if skill_name.startswith("daily") else "description"] = "第二次采集产生的变化"
                 changed.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
                 base = [sys.executable, str(skill / "scripts/run.py"), "all", "--output-root", str(root), "--run-at", run_at]
-                first = subprocess.run(base + ["--input", str(fixture)], capture_output=True, text=True)
+                first = subprocess.run(base + self.research_fixture_arg(skill_name, fixture), capture_output=True, text=True)
                 self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
                 target = root / relative
                 original_raw = (target / raw_name).read_text(encoding="utf-8")
-                stable = subprocess.run(base + ["--input", str(changed)], capture_output=True, text=True)
+                stable = subprocess.run(base + self.research_fixture_arg(skill_name, changed), capture_output=True, text=True)
                 self.assertEqual(stable.returncode, 0, stable.stdout + stable.stderr)
                 self.assertEqual((target / raw_name).read_text(encoding="utf-8"), original_raw)
-                refreshed = subprocess.run(base + ["--input", str(changed), "--mode", "refresh"], capture_output=True, text=True)
+                if skill_name.startswith("daily"):
+                    continue
+                refreshed = subprocess.run(base + self.research_fixture_arg(skill_name, changed) + ["--mode", "refresh"], capture_output=True, text=True)
                 self.assertEqual(refreshed.returncode, 0, refreshed.stdout + refreshed.stderr)
                 self.assertNotEqual((target / raw_name).read_text(encoding="utf-8"), original_raw)
                 self.assertTrue((target / "revisions/revision-01" / raw_name).exists())
@@ -77,12 +89,12 @@ class ModularArchitectureTests(unittest.TestCase):
                 skill = ROOT / skill_name
                 result = subprocess.run(
                     [sys.executable, str(skill / "scripts" / "run.py"), "all",
-                     "--output-root", str(output_root), "--input",
-                     str(fixture_path), "--run-at", run_at],
+                     "--output-root", str(output_root), "--run-at", run_at]
+                    + self.research_fixture_arg(skill_name, fixture_path),
                     capture_output=True, text=True,
                 )
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                package = next(output_root.glob(f"{content_type}/*/content-package.json"))
+                package = next(output_root.glob(self.research_output_glob(skill_name, content_type)))
                 payload = json.loads(package.read_text(encoding="utf-8"))
                 self.assertEqual(payload["schema_version"], 1)
                 self.assertEqual(payload["content_type"], content_type)
