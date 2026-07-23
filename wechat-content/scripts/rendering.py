@@ -107,7 +107,23 @@ def normalize_overview(value, fallback: list[str]) -> list[str]:
         rows=[item.strip() for item in re.split(r"[；;。！？!?\r\n]+",value) if item.strip()]
     else:
         rows=[]
+    rows=[row for row in rows if not is_internal_review_text(row)]
     return (rows or fallback)[:6]
+
+
+def is_internal_review_text(value: str) -> bool:
+    text = str(value or "")
+    blocked = (
+        "\u53d1\u5e03\u524d\u590d\u6838",
+        "\u4ec5\u6709\u6743\u5a01\u5a92\u4f53\u62a5\u9053",
+        "\u5f85\u4eba\u5de5\u786e\u8ba4",
+        "\u5c1a\u672a\u6838\u9a8c",
+        "\u5185\u5bb9\u5f85\u8865\u5168",
+        "\u9700\u4eba\u5de5\u8865\u5168",
+        "\u590d\u5236\u540e\u8bf7",
+        "\u4e0a\u6e38\u6ca1\u6709\u5165\u9009\u65b0\u95fb",
+    )
+    return any(phrase in text for phrase in blocked)
 
 
 def font(size: int, bold: bool = False):

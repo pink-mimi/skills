@@ -17,6 +17,16 @@ class WechatContentTests(unittest.TestCase):
         self.assertEqual("".join(lines),title.replace(" ",""))
         self.assertNotIn("…","".join(lines))
 
+    def test_daily_news_cover_title_falls_back_to_topic_not_fixed_count(self):
+        from run import resolve_cover_title
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        fixture["editorial"].pop("cover_title",None)
+        fixture["items"][0]["title"]="\u65c5\u6e38\u5e02\u573a\u76d1\u7ba1\u4e0e\u57fa\u7840\u6559\u80b2\u65b0\u52a8\u6001"
+        title=resolve_cover_title(fixture,"")
+        self.assertIn("\u65c5\u6e38\u5e02\u573a\u76d1\u7ba1",title)
+        self.assertNotIn("\u8fd9",title)
+        self.assertNotIn("\u4ef6\u4e8b",title)
+
     def build(self, fixture, temp, extra=None):
         source=Path(fixture) if Path(fixture).is_absolute() else SKILL/"tests/fixtures"/fixture
         command=[sys.executable,str(SKILL/"scripts/run.py"),"all","--input",str(source),"--output-root",temp]
@@ -288,6 +298,16 @@ class WechatContentTests(unittest.TestCase):
         self.assertIn("- 市场监管公布典型案件",article)
         self.assertIn("- 基础教育发布新安排",article)
         self.assertNotIn("\n- 市\n- 场\n",article)
+
+    def test_news_overview_filters_internal_review_language(self):
+        from rendering import build_article
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        fixture["editorial"]["overview"]="\u5e02\u573a\u76d1\u7ba1\u603b\u5c40\u516c\u5e03\u65c5\u6e38\u884c\u4e1a\u4e0d\u6b63\u5f53\u7ade\u4e89\u5178\u578b\u6848\u4ef6\uff1b\u90e8\u5206\u793e\u4f1a\u4e0e\u79d1\u6280\u8bae\u9898\u76ee\u524d\u4ec5\u6709\u6743\u5a01\u5a92\u4f53\u62a5\u9053\uff0c\u4ecd\u9700\u53d1\u5e03\u524d\u590d\u6838\uff1b\u4e2d\u83f2\u5916\u957f\u5728\u9a6c\u5c3c\u62c9\u4f1a\u89c1\u3002"
+        article,_title,_summary=build_article(fixture)
+        self.assertIn("\u65c5\u6e38\u884c\u4e1a\u4e0d\u6b63\u5f53\u7ade\u4e89",article)
+        self.assertIn("\u4e2d\u83f2\u5916\u957f",article)
+        self.assertNotIn("\u53d1\u5e03\u524d\u590d\u6838",article)
+        self.assertNotIn("\u4ec5\u6709\u6743\u5a01\u5a92\u4f53\u62a5\u9053",article)
 
     def test_news_reminder_label_matches_content_and_has_stable_default(self):
         from rendering import choose_news_reminder_label

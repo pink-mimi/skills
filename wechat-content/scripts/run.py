@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import struct
 from datetime import datetime
 from pathlib import Path
@@ -46,6 +47,22 @@ def title_options(content_type: str, title: str, count: int) -> list[str]:
     if content_type == "daily-news":
         return [title, f"未完地图｜{title}", f"昨天，这 {count} 件事值得关注", f"昨日坐标：{count} 个正在发生的变化", f"别只看热搜，昨天更值得留意的是这些事"]
     return [title, f"未完地图｜{title}", f"本周开源坐标：{count} 个值得收藏的项目", f"GitHub 本周观察：这 {count} 个项目解决了什么", f"从热榜到实用：本周值得打开的 {count} 个项目"]
+
+
+def resolve_cover_title(payload: dict, article_title: str) -> str:
+    editorial = payload.get("editorial") or {}
+    explicit = str(editorial.get("cover_title") or "").strip()
+    if explicit:
+        return explicit
+    if payload.get("content_type") != "daily-news":
+        return article_title
+    for item in payload.get("items") or []:
+        candidate = str(item.get("title") or item.get("summary") or "").strip()
+        if candidate:
+            candidate = re.sub(r"^[\d一二三四五六七八九十]+[、.．]\s*", "", candidate)
+            candidate = re.sub(r"\s+", "", candidate)
+            return candidate[:24]
+    return article_title
 
 
 def enforce_content_quality(payload: dict) -> dict:
@@ -137,7 +154,7 @@ def main() -> None:
             visual["image_mode"] = "weekday_fallback"
     if args.command in ("build", "all"):
         article, title, summary = build_article(payload)
-        cover_title=(payload.get("editorial") or {}).get("cover_title") or (f"昨天，这 {len(payload['items'])} 件事值得关注" if payload["content_type"]=="daily-news" else title)
+        cover_title=resolve_cover_title(payload,title)
         image_mode = render_images(out / "images", payload, theme, cover_title, visual)
         write(out / "公众号成稿.md", article)
         write(out / "微信版.html", build_html(article, out / "images", payload, theme, visual, copy_state))
