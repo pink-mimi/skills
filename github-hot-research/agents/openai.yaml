@@ -1,0 +1,5 @@
+interface:
+  display_name: "GitHub 热门研究"
+  short_description: "核验前一周热门项目并生成标准内容包"
+  default_prompt: "使用 $github-hot-research 生成本周 GitHub 热门标准内容包。"
+

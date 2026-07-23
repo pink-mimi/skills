@@ -1,0 +1,62 @@
+{
+  "schema_version": 2,
+  "timezone": "Asia/Shanghai",
+  "window": {"end_time": "06:00", "duration_hours": 24},
+  "collection": {
+    "timeout_seconds": 10,
+    "max_workers": 8,
+    "maximum_candidates": 50,
+    "retry_count": 1,
+    "discovery_soft_limit_seconds": 60,
+    "default_max_response_bytes": 2097152,
+    "maximum_redirects": 3
+  },
+  "verification": {
+    "minimum_queue": 10,
+    "maximum_queue": 15,
+    "soft_limit_seconds": 360,
+    "sensitive_categories": ["politics", "finance", "public-safety"],
+    "recheck_categories": ["public-safety", "weather", "market", "policy"]
+  },
+  "health": {
+    "minimum_successful_organizations": 5,
+    "maximum_consecutive_parse_failures": 2,
+    "require_all_sensitive_primary_sources": true
+  },
+  "selection": {
+    "minimum": 5,
+    "maximum": 8,
+    "minimum_categories": 4,
+    "maximum_per_category": 2,
+    "maximum_local": 1,
+    "maximum_international": 1,
+    "scope": "china-national",
+    "required_editorial_fields": ["what_happened", "why_it_matters", "reader_action", "editor_note", "keywords"]
+  },
+  "sources": [
+    {"name":"中国政府网·政策文件库","organization":"中国政府网","url":"https://sousuo.www.gov.cn/zcwjk/","type":"web","parser":"gov_policy","category":"politics","tier":1,"role":"primary","daily_default":true,"enabled":true,"canonical_domains":["gov.cn","www.gov.cn","sousuo.www.gov.cn"],"max_response_bytes":2097152},
+    {"name":"国家统计局·数据发布","organization":"国家统计局","url":"https://www.stats.gov.cn/sj/zxfb/","type":"web","parser":"stats_release","category":"finance","tier":1,"role":"primary","daily_default":true,"enabled":true,"canonical_domains":["stats.gov.cn","www.stats.gov.cn"],"max_response_bytes":2097152},
+    {"name":"工业和信息化部·新闻发布","organization":"工业和信息化部","url":"https://www.miit.gov.cn/xbymdz/sy/xbdh/xwfb/index.html","type":"web","parser":"miit_release","category":"tech","tier":1,"role":"primary","daily_default":true,"enabled":true,"canonical_domains":["miit.gov.cn","www.miit.gov.cn"],"max_response_bytes":2097152},
+    {"name":"应急管理部·公开信息","organization":"应急管理部","url":"https://www.mem.gov.cn/gk/","type":"web","parser":"mem_release","category":"public-safety","tier":1,"role":"primary","daily_default":true,"enabled":true,"canonical_domains":["mem.gov.cn","www.mem.gov.cn"],"max_response_bytes":2097152},
+    {"name":"中国气象局·预警信息","organization":"中国气象局","url":"https://www.cma.gov.cn/","type":"web","parser":"cma_warning","category":"public-safety","tier":1,"role":"primary","daily_default":true,"enabled":true,"canonical_domains":["cma.gov.cn","www.cma.gov.cn"],"max_response_bytes":2097152},
+    {"name":"新华网·要闻","organization":"新华社","url":"https://www.news.cn/","type":"web","parser":"media_web","category":"general","tier":2,"role":"discovery","daily_default":true,"enabled":true,"canonical_domains":["news.cn","www.news.cn","xinhuanet.com","www.xinhuanet.com"],"max_response_bytes":3145728},
+    {"name":"央视新闻","organization":"中央广播电视总台","url":"https://news.cctv.com/","type":"web","parser":"media_web","category":"general","tier":2,"role":"discovery","daily_default":true,"enabled":true,"canonical_domains":["cctv.com","news.cctv.com"],"max_response_bytes":3145728},
+    {"name":"人民网·时政","organization":"人民网","url":"http://www.people.com.cn/rss/politics.xml","type":"rss","parser":"rss_atom","category":"politics","tier":2,"role":"discovery","daily_default":true,"enabled":true,"allow_http":true,"canonical_domains":["people.com.cn","www.people.com.cn"],"max_response_bytes":2097152},
+    {"name":"人民网·财经","organization":"人民网","url":"http://www.people.com.cn/rss/finance.xml","type":"rss","parser":"rss_atom","category":"finance","tier":2,"role":"discovery","daily_default":true,"enabled":true,"allow_http":true,"canonical_domains":["people.com.cn","www.people.com.cn"],"max_response_bytes":2097152},
+    {"name":"人民网·社会","organization":"人民网","url":"http://www.people.com.cn/rss/society.xml","type":"rss","parser":"rss_atom","category":"society","tier":2,"role":"discovery","daily_default":true,"enabled":true,"allow_http":true,"canonical_domains":["people.com.cn","www.people.com.cn"],"max_response_bytes":2097152},
+    {"name":"人民网·国际","organization":"人民网","url":"http://www.people.com.cn/rss/world.xml","type":"rss","parser":"rss_atom","category":"world","tier":2,"role":"discovery","daily_default":true,"enabled":true,"allow_http":true,"canonical_domains":["people.com.cn","www.people.com.cn"],"max_response_bytes":2097152},
+    {"name":"人民网·科技","organization":"人民网","url":"http://www.people.com.cn/rss/it.xml","type":"rss","parser":"rss_atom","category":"tech","tier":2,"role":"discovery","daily_default":true,"enabled":true,"allow_http":true,"canonical_domains":["people.com.cn","www.people.com.cn"],"max_response_bytes":2097152},
+    {"name":"中国新闻网·滚动","organization":"中国新闻网","url":"https://www.chinanews.com/rss/scroll-news.xml","type":"rss","parser":"rss_atom","archive_parser":"chinanews_archive","archive_url_template":"https://www.chinanews.com.cn/scroll-news/{year}/{monthday}/news.shtml","category":"general","tier":2,"role":"discovery","daily_default":true,"enabled":true,"canonical_domains":["chinanews.com","www.chinanews.com","chinanews.com.cn","www.chinanews.com.cn"],"max_response_bytes":3145728},
+    {"name":"经济日报·中国经济网","organization":"经济日报","url":"https://www.ce.cn/index.shtml","type":"web","parser":"media_web","category":"finance","tier":2,"role":"discovery","daily_default":true,"enabled":true,"allow_http":true,"canonical_domains":["ce.cn","www.ce.cn"],"max_response_bytes":3145728},
+    {"name":"科技日报","organization":"科技日报","url":"https://www.stdaily.com/","type":"web","parser":"media_web","category":"tech","tier":2,"role":"discovery","daily_default":true,"enabled":true,"canonical_domains":["stdaily.com","www.stdaily.com"],"max_response_bytes":3145728},
+    {"name":"中国日报","organization":"中国日报","url":"https://cn.chinadaily.com.cn/","type":"web","parser":"media_web","category":"world","tier":2,"role":"background","daily_default":false,"enabled":true,"canonical_domains":["chinadaily.com.cn","cn.chinadaily.com.cn"],"max_response_bytes":3145728},
+    {"name":"IT之家","organization":"IT之家","url":"https://www.ithome.com/rss/","type":"rss","parser":"rss_atom","category":"tech","tier":3,"role":"background","daily_default":false,"enabled":true,"canonical_domains":["ithome.com","www.ithome.com"],"max_response_bytes":2097152},
+    {"name":"新浪体育","organization":"新浪","url":"https://sports.sina.com.cn/","type":"web","parser":"media_web","category":"sports","tier":3,"role":"discovery","daily_default":false,"enabled":true,"canonical_domains":["sina.com.cn","sports.sina.com.cn"],"max_response_bytes":3145728},
+    {"name":"新浪娱乐","organization":"新浪","url":"https://ent.sina.com.cn/","type":"web","parser":"media_web","category":"entertainment","tier":3,"role":"discovery","daily_default":false,"enabled":true,"canonical_domains":["sina.com.cn","ent.sina.com.cn"],"max_response_bytes":3145728},
+    {"name":"MIT Technology Review","organization":"MIT Technology Review","url":"https://www.technologyreview.com/feed/","type":"rss","parser":"rss_atom","category":"ai","tier":3,"role":"background","daily_default":false,"enabled":true,"canonical_domains":["technologyreview.com","www.technologyreview.com"],"max_response_bytes":2097152},
+    {"name":"Google AI Blog","organization":"Google","url":"https://blog.google/technology/ai/rss/","type":"rss","parser":"rss_atom","category":"ai","tier":3,"role":"primary","daily_default":false,"enabled":true,"canonical_domains":["google","blog.google"],"max_response_bytes":2097152},
+    {"name":"Google DeepMind","organization":"Google DeepMind","url":"https://deepmind.google/blog/rss.xml","type":"rss","parser":"rss_atom","category":"ai","tier":3,"role":"primary","daily_default":false,"enabled":true,"canonical_domains":["deepmind.google"],"max_response_bytes":2097152},
+    {"name":"Hacker News","organization":"Hacker News","url":"https://hnrss.org/frontpage","type":"rss","parser":"rss_atom","category":"ai-community","tier":4,"role":"clue","daily_default":false,"enabled":true,"canonical_domains":["hnrss.org"],"max_response_bytes":2097152},
+    {"name":"Product Hunt","organization":"Product Hunt","url":"https://www.producthunt.com/feed","type":"rss","parser":"rss_atom","category":"ai-community","tier":4,"role":"clue","daily_default":false,"enabled":true,"canonical_domains":["producthunt.com","www.producthunt.com"],"max_response_bytes":2097152}
+  ]
+}

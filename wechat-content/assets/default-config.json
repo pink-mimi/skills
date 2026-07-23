@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "brand": {"name": "未完地图", "author": ""},
+  "themes": {
+    "daily-news": ["news-blue", "clean-news", "warm-news"],
+    "github-hot": ["open-coordinates", "code-archive", "field-notes", "clean-grid"]
+  },
+  "news_visuals": {
+    "version": "1.0.0",
+    "weekdays": {
+      "monday": {"name": "city-departure", "palette_name": "monday-city", "palette": ["#EEF5FF", "#102F50", "#1769E0", "#F29A38"], "cover": "news-weekday/monday/cover.png", "overview": "news-weekday/monday/overview.png"},
+      "tuesday": {"name": "technology-coordinate", "palette_name": "tuesday-tech", "palette": ["#ECFAFC", "#123E4A", "#168B9B", "#D99A32"], "cover": "news-weekday/tuesday/cover.png", "overview": "news-weekday/tuesday/overview.png"},
+      "wednesday": {"name": "growth-path", "palette_name": "wednesday-growth", "palette": ["#F4F1FF", "#302A58", "#6757C8", "#58A995"], "cover": "news-weekday/wednesday/cover.png", "overview": "news-weekday/wednesday/overview.png"},
+      "thursday": {"name": "life-context", "palette_name": "thursday-life", "palette": ["#EEF8F6", "#173E3B", "#187A72", "#E77A62"], "cover": "news-weekday/thursday/cover.png", "overview": "news-weekday/thursday/overview.png"},
+      "friday": {"name": "trend-watch", "palette_name": "friday-trend", "palette": ["#F1F3FC", "#283456", "#465BB0", "#D7A62E"], "cover": "news-weekday/friday/cover.png", "overview": "news-weekday/friday/overview.png"},
+      "saturday": {"name": "safe-travel", "palette_name": "saturday-safety", "palette": ["#EDF8FF", "#163B58", "#268CC4", "#EB7045"], "cover": "news-weekday/saturday/cover.png", "overview": "news-weekday/saturday/overview.png"},
+      "sunday": {"name": "weekly-lookback", "palette_name": "sunday-review", "palette": ["#F7F1E6", "#27443B", "#3C7564", "#C68B52"], "cover": "news-weekday/sunday/cover.png", "overview": "news-weekday/sunday/overview.png"}
+    },
+    "default": {"name": "unfinished-map-default", "palette_name": "default-map", "palette": ["#F3F6F8", "#18384D", "#315F7A", "#D4844A"], "cover": "news-weekday/default/cover.png", "overview": "news-weekday/default/overview.png"}
+  },
+  "images": {"combined_cover": [1283, 383], "wide_cover": [900, 383], "square_cover": [383, 383], "body": [1200, 675], "maximum_bytes": 2097152}
+}

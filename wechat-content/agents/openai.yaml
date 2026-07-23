@@ -1,0 +1,4 @@
+interface:
+  display_name: "微信公众号内容制作"
+  short_description: "按栏目模板制作可复制、带配图的公众号审核包"
+  default_prompt: "使用 $wechat-content 识别这个标准内容包的栏目类型，制作带封面、正文配图和一键复制排版的公众号审核包。"
