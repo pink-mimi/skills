@@ -200,10 +200,12 @@ def prepare_research(raw,run_at,config):
     by_event={entry["event_id"]:entry for entry in queue}; candidates=[]
     for cluster in clusters:
         lead=dict(cluster["sources"][0]); verification=by_event.get(cluster["event_id"],{})
-        preserved_verified=lead.get("verification_status")=="verified" and bool(lead.get("primary_sources"))
+        existing_status=lead.get("verification_status")
+        preserved_verified=existing_status=="verified" and bool(lead.get("primary_sources"))
+        preserved_partial=existing_status=="partial" and bool(lead.get("verified_at")) and bool(lead.get("background_sources") or lead.get("discovery_sources"))
         lead.update({
             "event_id":cluster["event_id"],
-            "verification_status":"verified" if preserved_verified else verification.get("verification_status","unverified"),
+            "verification_status":existing_status if (preserved_verified or preserved_partial) else verification.get("verification_status","unverified"),
             "primary_sources":lead.get("primary_sources") or verification.get("primary_sources",[]),
             "discovery_sources":lead.get("discovery_sources") or verification.get("discovery_sources",[]),
         })

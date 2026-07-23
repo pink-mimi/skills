@@ -32,6 +32,12 @@ class DailyNewsResearchTests(unittest.TestCase):
         self.assertEqual(package["status"],"ready_for_human_review",package.get("risks"))
         self.assertTrue(all(item["verification_status"]=="verified" for item in package["items"]))
 
+    def test_prepare_research_preserves_partial_editorial_enrichment(self):
+        config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
+        item={"title":"中央财政基础研究投入稳步增加","url":"https://example.com/research","source":"科技日报","organization":"科技日报","source_role":"discovery","category":"tech","published_at":"2026-07-22T12:00:00+08:00","geographic_scope":"national","verification_status":"partial","verified_at":"2026-07-23T05:30:00+08:00","background_sources":[{"name":"财政部预算材料","url":"https://example.com/budget"}],"what_happened":"权威媒体报道相关投入持续增加。","why_it_matters":"基础研究投入关系长期创新能力。","reader_action":"引用数字时核对预算口径。","editor_note":"报道中的部分数字仍需结合官方材料复核。","keywords":["基础研究","科研投入"]}
+        package,_queue,_excluded=run.prepare_research({"items":[item],"meta":{"successful_organizations":8},"source_health":[]},run.datetime.fromisoformat("2026-07-23T06:00:00+08:00"),config)
+        self.assertEqual(package["items"][0]["verification_status"],"partial")
+
     def test_domestic_digest_rejects_unrelated_foreign_items(self):
         config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
         base={"published_at":"2026-07-19T12:00:00+08:00","summary":"摘要","what_happened":"事实","why_it_matters":"影响","reader_action":"建议","editor_note":"提醒","keywords":["关键词"]}

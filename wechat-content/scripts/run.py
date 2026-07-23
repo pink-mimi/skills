@@ -10,7 +10,7 @@ from rendering import build_article, build_html, render_images
 from news_visuals import choose_news_visual, valid_live_pair
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE_VERSION = "2.1.1"
+TEMPLATE_VERSION = "2.1.2"
 NEWS_REQUIRED_FIELDS = ("what_happened", "why_it_matters", "reader_action", "editor_note", "keywords")
 
 
@@ -58,6 +58,31 @@ def enforce_content_quality(payload: dict) -> dict:
     return payload
 
 
+def copy_eligibility(payload: dict) -> dict:
+    if payload.get("content_type") != "daily-news":
+        allowed=payload.get("status")=="ready_for_human_review"
+        return {"allowed":allowed,"reason":"ready" if allowed else "needs_review","partial_count":0}
+    incomplete=[item for item in payload.get("items",[]) if any(not item.get(field) for field in NEWS_REQUIRED_FIELDS)]
+    if incomplete:
+        return {"allowed":False,"reason":f"{len(incomplete)} 条新闻缺少发布字段","partial_count":0}
+    if payload.get("status")=="ready_for_human_review":
+        return {"allowed":True,"reason":"ready","partial_count":0}
+    def effective_status(item):
+        status=str(item.get("verification_status") or "unverified")
+        if status in {"verified","partial"}:
+            return status
+        for evidence in item.get("discovery_sources") or []:
+            if evidence.get("verification_status")=="partial" and evidence.get("verified_at") and evidence.get("background_sources"):
+                return "partial"
+        return status
+    statuses=[effective_status(item) for item in payload.get("items",[])]
+    unverified=sum(status not in {"verified","partial"} for status in statuses)
+    if unverified:
+        return {"allowed":False,"reason":f"{unverified} 条新闻尚未核验","partial_count":statuses.count("partial")}
+    partial_count=statuses.count("partial")
+    return {"allowed":bool(statuses),"reason":"partial_review" if partial_count else "ready","partial_count":partial_count}
+
+
 def verify(out: Path, payload: dict) -> None:
     errors = []
     for name in ("公众号成稿.md", "微信版.html", "备选标题.txt", "公众号摘要.txt", "运行报告.md", "render-manifest.json"):
@@ -97,6 +122,7 @@ def main() -> None:
     if payload.get("schema_version") != 1 or payload.get("content_type") not in ("daily-news", "github-hot"):
         raise SystemExit("不支持的标准内容包")
     payload=enforce_content_quality(payload)
+    copy_state=copy_eligibility(payload)
     run_at = datetime.fromisoformat(payload["run_at"])
     out = output(args.output_root, payload)
     theme = choose_theme(payload["content_type"], args.theme, config, run_at)
@@ -114,10 +140,10 @@ def main() -> None:
         cover_title=(payload.get("editorial") or {}).get("cover_title") or (f"昨天，这 {len(payload['items'])} 件事值得关注" if payload["content_type"]=="daily-news" else title)
         image_mode = render_images(out / "images", payload, theme, cover_title, visual)
         write(out / "公众号成稿.md", article)
-        write(out / "微信版.html", build_html(article, out / "images", payload, theme, visual))
+        write(out / "微信版.html", build_html(article, out / "images", payload, theme, visual, copy_state))
         write(out / "备选标题.txt", "\n".join(title_options(payload["content_type"], title, len(payload["items"]))))
         write(out / "公众号摘要.txt", summary)
-        manifest = {"schema_version": 1, "content_template": payload["content_type"], "template_version": TEMPLATE_VERSION, "theme": theme, "theme_version": "2.0.0", "image_mode": image_mode, "input_status":payload["status"], "source_package": payload["package_id"]}
+        manifest = {"schema_version": 1, "content_template": payload["content_type"], "template_version": TEMPLATE_VERSION, "theme": theme, "theme_version": "2.0.0", "image_mode": image_mode, "input_status":payload["status"], "copy_allowed":copy_state["allowed"], "copy_reason":copy_state["reason"], "source_package": payload["package_id"]}
         if visual:
             manifest.update({"visual_variant":visual["name"],"color_theme":visual["palette_name"],"asset_version":config["news_visuals"]["version"],"fallback_reason":visual["fallback_reason"]})
         write(out / "render-manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
@@ -125,7 +151,10 @@ def main() -> None:
         write(out / "运行报告.md", f"# 运行报告\n\n- content_type: `{payload['content_type']}`\n- input_status: `{payload['status']}`\n- content_template: `{payload['content_type']}@{TEMPLATE_VERSION}`\n- theme: `{theme}@2.0.0`\n- image_mode: `{image_mode}`{visual_report}\n- 发布：仅生成审核包，未上传、未发布。")
     if args.command in ("verify", "all"):
         verify(out, payload)
-        print("OK" if payload["status"] == "ready_for_human_review" else "STRUCTURE_OK_CONTENT_NEEDS_REVIEW")
+        if copy_state["allowed"]:
+            print("OK_WITH_PARTIAL_REVIEW" if copy_state["partial_count"] else "OK")
+        else:
+            print("STRUCTURE_OK_CONTENT_NEEDS_REVIEW")
 
 
 if __name__ == "__main__":

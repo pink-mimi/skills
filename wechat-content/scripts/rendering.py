@@ -100,6 +100,16 @@ def filter_news_follow_up(points: list[str], titles: list[str]) -> list[str]:
     return kept
 
 
+def normalize_overview(value, fallback: list[str]) -> list[str]:
+    if isinstance(value,list):
+        rows=[str(item).strip() for item in value if str(item).strip()]
+    elif isinstance(value,str):
+        rows=[item.strip() for item in re.split(r"[；;。！？!?\r\n]+",value) if item.strip()]
+    else:
+        rows=[]
+    return (rows or fallback)[:6]
+
+
 def font(size: int, bold: bool = False):
     candidates = [
         Path("C:/Windows/Fonts/msyhbd.ttc" if bold else "C:/Windows/Fonts/msyh.ttc"),
@@ -327,7 +337,7 @@ def build_article(payload: dict):
         start=datetime.fromisoformat(payload["window"]["start"]); end=datetime.fromisoformat(payload["window"]["end"])
         date_label=f"{start.month}月{start.day}日"
         title = editorial.get("title") or f"{date_label}国内新闻梳理：{len(items)}条变化值得继续关注"
-        overview=editorial.get("overview") or [item.get("summary") or item.get("title","") for item in items]
+        overview=normalize_overview(editorial.get("overview"),[item.get("summary") or item.get("title","") for item in items])
         window_text=f"北京时间 {start.year}年{start.month}月{start.day}日{start:%H:%M}—{end.month}月{end.day}日{end:%H:%M}"
         lines = [f"# {title}", "", "<!-- role:time-window -->", f"> 统计时段：{window_text}。", "", "## 30秒速览", ""]
         lines += [f"- {text}" for text in overview]
@@ -383,7 +393,7 @@ def data_uri(path: Path):
     return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode("ascii")
 
 
-def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual: dict | None = None):
+def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual: dict | None = None, copy_state: dict | None = None):
     bg, ink, primary, accent = tuple(visual["palette"]) if visual else PALETTES[theme]
     label = "昨日坐标" if payload["content_type"] == "daily-news" else "开源坐标"
     title=next((line[2:].strip() for line in markdown.splitlines() if line.startswith("# ")),"微信公众号审核包")
@@ -406,12 +416,7 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
         if line.startswith("> "):
             content=inline(line[2:],primary)
             if pending_role == "time-window": blocks.append(f'<blockquote data-role="time-window" style="margin:18px 0;padding:14px 16px;border:1px solid {primary}2E;border-left:4px solid {primary};background:{bg};border-radius:10px;box-shadow:0 4px 12px {primary}12;color:{ink};font-size:15px;line-height:1.8">{content}</blockquote>')
-            elif pending_role == "keywords":
-                keyword_text=re.sub(r"\*\*","",line[2:]).strip()
-                keyword_text=re.sub(r"^关键词[：:]?\s*","",keyword_text)
-                keyword_values=[value.strip() for value in re.split(r"[｜|]",keyword_text) if value.strip()]
-                chips="".join(f'<span data-role="keyword-chip" style="display:inline-block;margin:3px 6px 3px 0;padding:3px 10px;border:1px solid {primary}38;border-radius:999px;background:#fff;color:{primary};font-size:13px;line-height:1.7;font-weight:650">{html.escape(value)}</span>' for value in keyword_values)
-                blocks.append(f'<div data-role="keywords" style="margin:10px 0 20px;padding:11px 13px;border:1px solid {primary}26;border-radius:10px;background:{bg};box-shadow:0 3px 10px {primary}0D"><span data-role="keyword-label" style="display:inline-block;margin:3px 10px 3px 0;color:{ink};font-size:14px;line-height:1.7;font-weight:800">关键词</span>{chips}</div>')
+            elif pending_role == "keywords": blocks.append(f'<p data-role="keywords" style="margin:10px 0 20px;padding:12px 15px;border-left:4px solid {primary};border-radius:8px;background:{bg};color:{ink};font-size:14px;line-height:1.8;overflow-wrap:anywhere">{content}</p>')
             elif pending_role == "editor-note": blocks.append(f'<blockquote data-role="editor-note" style="margin:18px 0;padding:14px 16px;background:{bg};border:1px solid {primary}26;border-left:4px solid {accent};border-radius:10px;box-shadow:0 4px 12px {primary}0D;color:{ink};font-size:15px;line-height:1.8">{content}</blockquote>')
             else: blocks.append(f'<blockquote style="margin:20px 0;padding:16px 18px;background:{bg};border:0;border-radius:8px;color:{primary};font-size:15px;line-height:1.8">{content}</blockquote>')
             pending_role=None; continue
@@ -424,14 +429,15 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
             else: blocks.append(f'<p style="font-size:15px;line-height:1.85;color:#465C63;margin:7px 0;padding:8px 12px;background:{bg};border-radius:6px;overflow-wrap:anywhere">{inline(line,primary)}</p>')
             pending_role=None; continue
         blocks.append(f'<p style="font-size:16px;line-height:1.95;color:#31474F;margin:12px 0;text-align:justify;overflow-wrap:anywhere">{inline(line,primary)}</p>')
-    ready_to_copy = payload["status"] == "ready_for_human_review"
+    copy_state=copy_state or {"allowed":payload["status"]=="ready_for_human_review","reason":"legacy","partial_count":0}
+    ready_to_copy = bool(copy_state["allowed"])
     if ready_to_copy:
         button_attributes = 'style="padding:12px 24px;border:0;border-radius:7px;background:#fff;color:#2563EB;font-size:17px;font-weight:700;cursor:pointer" onclick="copyWechat()"'
         button_label = "一键复制公众号正文"
-        notice = ""
+        notice = (f'<div data-role="review-notice" style="max-width:740px;margin:18px auto;padding:12px;background:#FFF2CC;color:#6B5415">其中 {copy_state["partial_count"]} 条新闻为部分核验，复制后请在发布前复核来源和动态信息。</div>' if copy_state.get("partial_count") else "")
     else:
         button_attributes = 'disabled aria-disabled="true" style="padding:12px 24px;border:0;border-radius:7px;background:#CBD5E1;color:#64748B;font-size:17px;font-weight:700;cursor:not-allowed"'
         button_label = "内容待补全，暂不可复制"
-        notice = '<div data-role="review-notice" style="max-width:740px;margin:18px auto;padding:12px;background:#FFF2CC;color:#6B5415">输入内容缺少发布所需字段，请先完成人工补全和核验。</div>'
+        notice = f'<div data-role="review-notice" style="max-width:740px;margin:18px auto;padding:12px;background:#FFF2CC;color:#6B5415">{html.escape(copy_state.get("reason") or "内容尚未达到复制条件")}，请先补全或核验。</div>'
     cover=data_uri(image_dir/"横版封面.png")
     return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)}｜微信排版预览</title></head><body style="margin:0;background:#EFF6FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif"><div style="position:sticky;top:0;background:#102A43;padding:15px;text-align:center;z-index:9"><button id="copy-wechat" {button_attributes}>{button_label}</button><span id="copy-status" style="color:#DBEAFE;margin-left:14px">复制后粘贴到微信公众号编辑器</span></div>{notice}<main style="max-width:760px;margin:24px auto;padding:0 16px 40px;box-sizing:border-box"><section id="cover-preview" style="margin-bottom:18px;padding:18px;background:#fff;border-radius:12px;box-shadow:0 4px 18px rgba(30,64,175,.08)"><img src="{cover}" alt="横版封面" style="display:block;width:100%;height:auto;border-radius:8px"><h1 style="margin:20px 0 8px;color:#102A43;font-size:27px;line-height:1.4">{html.escape(title)}</h1><p style="margin:0;color:#64748B;font-size:14px">封面和标题不包含在复制区域，请在公众号后台分别填写。</p></section><article id="wechat-content" style="padding:28px 24px;border-radius:12px;background:#fff;box-shadow:0 4px 18px rgba(30,64,175,.08)">{''.join(blocks)}</article></main><script>async function copyWechat(){{const node=document.getElementById('wechat-content');try{{const htmlBlob=new Blob([node.innerHTML],{{type:'text/html'}});const textBlob=new Blob([node.innerText],{{type:'text/plain'}});await navigator.clipboard.write([new ClipboardItem({{'text/html':htmlBlob,'text/plain':textBlob}})]);document.getElementById('copy-status').textContent='复制成功，请到公众号编辑器粘贴';}}catch(error){{const range=document.createRange();range.selectNodeContents(node);const selection=getSelection();selection.removeAllRanges();selection.addRange(range);document.execCommand('copy');selection.removeAllRanges();document.getElementById('copy-status').textContent='已复制，请粘贴后检查图片';}}}}</script></body></html>'''

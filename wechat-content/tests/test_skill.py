@@ -76,6 +76,8 @@ class WechatContentTests(unittest.TestCase):
         ))
         for phrase in ("七天七色","--image-input-dir","live_image2","weekday_fallback","默认兜底"):
             self.assertIn(phrase,docs)
+        for phrase in ("部分核验","发布前复核","关键词信息条"):
+            self.assertIn(phrase,docs)
 
     def test_valid_live_images_are_used_and_recorded(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -178,22 +180,23 @@ class WechatContentTests(unittest.TestCase):
             self.assertTrue(labels)
             self.assertTrue(all("background:" not in label for label in labels))
 
-    def test_news_information_cards_use_rounded_hierarchy_and_keyword_chips(self):
+    def test_news_information_cards_use_rounded_hierarchy_and_keyword_bar(self):
         with tempfile.TemporaryDirectory() as temp:
             out=self.build("daily-news-content-package.json",temp)
             page=(out/"微信版.html").read_text(encoding="utf-8")
             manifest=json.loads((out/"render-manifest.json").read_text(encoding="utf-8"))
             time_card=page.split('data-role="time-window"',1)[1].split("</blockquote>",1)[0]
-            keyword_card=page.split('data-role="keywords"',1)[1].split("</div>",1)[0]
+            keyword_card=page.split('data-role="keywords"',1)[1].split("</p>",1)[0]
             note_card=page.split('data-role="editor-note"',1)[1].split("</blockquote>",1)[0]
             self.assertIn("border-radius:10px",time_card)
             self.assertIn("box-shadow:",time_card)
-            self.assertIn('data-role="keyword-label"',keyword_card)
-            self.assertGreaterEqual(keyword_card.count('data-role="keyword-chip"'),2)
-            self.assertIn("border-radius:999px",keyword_card)
+            self.assertIn("关键词：",keyword_card)
+            self.assertIn("｜",keyword_card)
+            self.assertNotIn('data-role="keyword-chip"',keyword_card)
+            self.assertIn("border-radius:8px",keyword_card)
             self.assertIn("border-radius:10px",note_card)
             self.assertIn("border:1px solid",note_card)
-            self.assertEqual(manifest["template_version"],"2.1.1")
+            self.assertEqual(manifest["template_version"],"2.1.2")
 
     def test_incomplete_news_package_is_downgraded_to_needs_review(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
@@ -201,7 +204,7 @@ class WechatContentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             source=Path(temp)/"incomplete.json"; source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
             out=self.build(source,temp)
-            self.assertIn("输入内容缺少发布所需字段",(out/"微信版.html").read_text(encoding="utf-8"))
+            self.assertIn("1 条新闻缺少发布字段",(out/"微信版.html").read_text(encoding="utf-8"))
             manifest=json.loads((out/"render-manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["input_status"],"needs_review")
 
@@ -236,6 +239,55 @@ class WechatContentTests(unittest.TestCase):
             button=page.split('<button id="copy-wechat"',1)[1].split("</button>",1)[0]
             self.assertNotIn("disabled",button)
             self.assertNotIn('data-role="review-notice"',page)
+
+    def test_complete_partial_news_allows_copy_with_review_notice(self):
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        fixture["status"]="needs_review"
+        fixture["items"][0]["verification_status"]="partial"
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/"partial.json"
+            source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
+            out=self.build(source,temp)
+            page=(out/"微信版.html").read_text(encoding="utf-8")
+            button=page.split('<button id="copy-wechat"',1)[1].split("</button>",1)[0]
+            self.assertNotIn("disabled",button)
+            self.assertIn("1 条新闻为部分核验",page)
+
+    def test_complete_unverified_news_still_disables_copy(self):
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        fixture["status"]="needs_review"
+        fixture["items"][0]["verification_status"]="unverified"
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/"unverified.json"
+            source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
+            out=self.build(source,temp)
+            page=(out/"微信版.html").read_text(encoding="utf-8")
+            button=page.split('<button id="copy-wechat"',1)[1].split("</button>",1)[0]
+            self.assertIn("disabled",button)
+
+    def test_legacy_nested_partial_evidence_allows_copy(self):
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        fixture["status"]="needs_review"
+        item=fixture["items"][0]
+        item["verification_status"]="unverified"
+        item["discovery_sources"]=[{"verification_status":"partial","verified_at":"2026-07-23T05:30:00+08:00","background_sources":[{"url":"https://example.com/official"}]}]
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/"legacy-partial.json"
+            source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
+            out=self.build(source,temp)
+            page=(out/"微信版.html").read_text(encoding="utf-8")
+            button=page.split('<button id="copy-wechat"',1)[1].split("</button>",1)[0]
+            self.assertNotIn("disabled",button)
+            self.assertIn("1 条新闻为部分核验",page)
+
+    def test_string_overview_is_split_into_sentences_not_characters(self):
+        from rendering import build_article
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        fixture["editorial"]["overview"]="市场监管公布典型案件；基础教育发布新安排；周边外交保持沟通。"
+        article,_title,_summary=build_article(fixture)
+        self.assertIn("- 市场监管公布典型案件",article)
+        self.assertIn("- 基础教育发布新安排",article)
+        self.assertNotIn("\n- 市\n- 场\n",article)
 
     def test_news_reminder_label_matches_content_and_has_stable_default(self):
         from rendering import choose_news_reminder_label
