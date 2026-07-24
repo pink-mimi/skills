@@ -184,7 +184,7 @@ class WechatContentTests(unittest.TestCase):
             self.assertIn('data-role="time-window"',page)
             self.assertIn('border-left:4px solid',page)
             self.assertIn('data-role="keywords"',page)
-            self.assertIn('data-role="editor-note"',page)
+            self.assertIn('data-role="editor-review-panel"',page)
             self.assertIn('data-role="section-label"',page)
             labels=[part.split("</p>",1)[0] for part in page.split('data-role="section-label"')[1:]]
             self.assertTrue(labels)
@@ -197,16 +197,16 @@ class WechatContentTests(unittest.TestCase):
             manifest=json.loads((out/"render-manifest.json").read_text(encoding="utf-8"))
             time_card=page.split('data-role="time-window"',1)[1].split("</blockquote>",1)[0]
             keyword_card=page.split('data-role="keywords"',1)[1].split("</p>",1)[0]
-            note_card=page.split('data-role="editor-note"',1)[1].split("</blockquote>",1)[0]
+            review_panel=page.split('data-role="editor-review-panel"',1)[1].split("</aside>",1)[0]
             self.assertIn("border-radius:10px",time_card)
             self.assertIn("box-shadow:",time_card)
             self.assertIn("关键词：",keyword_card)
             self.assertIn("｜",keyword_card)
             self.assertNotIn('data-role="keyword-chip"',keyword_card)
             self.assertIn("border-radius:8px",keyword_card)
-            self.assertIn("border-radius:10px",note_card)
-            self.assertIn("border:1px solid",note_card)
-            self.assertEqual(manifest["template_version"],"2.1.2")
+            self.assertIn("border-radius:10px",review_panel)
+            self.assertIn("不会被复制到公众号正文",review_panel)
+            self.assertEqual(manifest["template_version"],"2.2.0")
 
     def test_incomplete_news_package_is_downgraded_to_needs_review(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
@@ -214,7 +214,7 @@ class WechatContentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             source=Path(temp)/"incomplete.json"; source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
             out=self.build(source,temp)
-            self.assertIn("1 条新闻缺少发布字段",(out/"微信版.html").read_text(encoding="utf-8"))
+            self.assertIn("1 条新闻缺少读者正文必填字段",(out/"微信版.html").read_text(encoding="utf-8"))
             manifest=json.loads((out/"render-manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["input_status"],"needs_review")
 
@@ -261,19 +261,38 @@ class WechatContentTests(unittest.TestCase):
             page=(out/"微信版.html").read_text(encoding="utf-8")
             button=page.split('<button id="copy-wechat"',1)[1].split("</button>",1)[0]
             self.assertNotIn("disabled",button)
-            self.assertIn("1 条新闻为部分核验",page)
+            self.assertIn("0 条未核验，1 条部分核验",page)
 
-    def test_complete_unverified_news_still_disables_copy(self):
+    def test_complete_unverified_news_allows_copy_but_is_not_publish_ready(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
         fixture["status"]="needs_review"
         fixture["items"][0]["verification_status"]="unverified"
+        fixture["items"][0]["editor_note"]="内部审核：发布前补齐官方原文。"
         with tempfile.TemporaryDirectory() as temp:
             source=Path(temp)/"unverified.json"
             source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
             out=self.build(source,temp)
             page=(out/"微信版.html").read_text(encoding="utf-8")
+            manifest=json.loads((out/"render-manifest.json").read_text(encoding="utf-8"))
             button=page.split('<button id="copy-wechat"',1)[1].split("</button>",1)[0]
-            self.assertIn("disabled",button)
+            article=page.split('id="wechat-content"',1)[1].split("</article>",1)[0]
+            self.assertNotIn("disabled",button)
+            self.assertIn("复制正文（发布前需核验）",button)
+            self.assertIn("内部审核：发布前补齐官方原文。",page[:page.index('id="wechat-content"')])
+            self.assertNotIn("内部审核：发布前补齐官方原文。",article)
+            self.assertTrue(manifest["copy_allowed"])
+            self.assertFalse(manifest["publish_ready"])
+            self.assertEqual(manifest["review_counts"]["unverified"],1)
+
+    def test_verified_news_is_copyable_and_publish_ready(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out=self.build("daily-news-content-package.json",temp)
+            page=(out/"微信版.html").read_text(encoding="utf-8")
+            manifest=json.loads((out/"render-manifest.json").read_text(encoding="utf-8"))
+            button=page.split('<button id="copy-wechat"',1)[1].split("</button>",1)[0]
+            self.assertIn("复制正文，可发布",button)
+            self.assertTrue(manifest["copy_allowed"])
+            self.assertTrue(manifest["publish_ready"])
 
     def test_legacy_nested_partial_evidence_allows_copy(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
@@ -288,7 +307,7 @@ class WechatContentTests(unittest.TestCase):
             page=(out/"微信版.html").read_text(encoding="utf-8")
             button=page.split('<button id="copy-wechat"',1)[1].split("</button>",1)[0]
             self.assertNotIn("disabled",button)
-            self.assertIn("1 条新闻为部分核验",page)
+            self.assertIn("0 条未核验，1 条部分核验",page)
 
     def test_string_overview_is_split_into_sentences_not_characters(self):
         from rendering import build_article
@@ -401,14 +420,15 @@ class WechatContentTests(unittest.TestCase):
             article=(out/"公众号成稿.md").read_text(encoding="utf-8")
             self.assertNotIn("## 今天值得关注",article)
 
-    def test_news_render_uses_contextual_reminder_and_preserves_note(self):
+    def test_news_editor_note_is_only_in_external_review_panel(self):
         with tempfile.TemporaryDirectory() as temp:
             out = self.build("daily-news-content-package.json", temp)
             article = (out / "公众号成稿.md").read_text(encoding="utf-8")
             page = (out / "微信版.html").read_text(encoding="utf-8")
-            self.assertIn("与你有关：", article)
-            self.assertIn("先确认自己是否属于适用人群，再安排办理。", article)
-            self.assertIn('data-role="editor-note"', page)
-            self.assertNotIn("小清提醒", article + page)
+            copy_start=page.index('id="wechat-content"')
+            self.assertNotIn("先确认自己是否属于适用人群，再安排办理。",article)
+            self.assertIn('data-role="editor-review-panel"',page[:copy_start])
+            self.assertIn("先确认自己是否属于适用人群，再安排办理。",page[:copy_start])
+            self.assertNotIn('data-role="editor-note"',page[copy_start:])
 
 if __name__=="__main__": unittest.main()
