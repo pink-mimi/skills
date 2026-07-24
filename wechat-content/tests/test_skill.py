@@ -27,6 +27,45 @@ class WechatContentTests(unittest.TestCase):
         self.assertNotIn("\u8fd9",title)
         self.assertNotIn("\u4ef6\u4e8b",title)
 
+    def test_article_title_overrides_internal_package_title(self):
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        fixture["editorial"]["title"]="2026-07-19 新闻内容包"
+        fixture["editorial"]["article_title"]="7月19日国内要闻：公共服务新安排值得关注"
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/"article-title.json"
+            source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
+            out=self.build(source,temp)
+            article=(out/"公众号成稿.md").read_text(encoding="utf-8")
+            titles=(out/"备选标题.txt").read_text(encoding="utf-8")
+            self.assertTrue(article.startswith("# 7月19日国内要闻：公共服务新安排值得关注"))
+            self.assertTrue(titles.startswith("7月19日国内要闻：公共服务新安排值得关注"))
+            self.assertNotIn("新闻内容包",article)
+
+    def test_internal_package_title_uses_dated_domestic_news_fallback(self):
+        from rendering import build_article
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        fixture["editorial"]["title"]="2026-07-19 新闻内容包"
+        fixture["editorial"].pop("article_title",None)
+        article,title,_summary=build_article(fixture)
+        self.assertEqual(title,"7月19日国内要闻：1条变化值得关注")
+        self.assertNotIn("新闻内容包",article)
+
+    def test_reader_tip_is_copied_while_editor_note_stays_external(self):
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        fixture["items"][0]["reader_tip"]="选择服务前，先确认适用范围和办理时间。"
+        fixture["items"][0]["editor_note"]="内部审核：发布前复核原文。"
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/"reader-tip.json"
+            source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
+            out=self.build(source,temp)
+            page=(out/"微信版.html").read_text(encoding="utf-8")
+            copy=page.split('id="wechat-content"',1)[1].split("</article>",1)[0]
+            before=page[:page.index('id="wechat-content"')]
+            self.assertIn('data-role="reader-tip"',copy)
+            self.assertIn("选择服务前，先确认适用范围和办理时间。",copy)
+            self.assertNotIn("内部审核：发布前复核原文。",copy)
+            self.assertIn("内部审核：发布前复核原文。",before)
+
     def build(self, fixture, temp, extra=None):
         source=Path(fixture) if Path(fixture).is_absolute() else SKILL/"tests/fixtures"/fixture
         command=[sys.executable,str(SKILL/"scripts/run.py"),"all","--input",str(source),"--output-root",temp]
@@ -206,7 +245,7 @@ class WechatContentTests(unittest.TestCase):
             self.assertIn("border-radius:8px",keyword_card)
             self.assertIn("border-radius:10px",review_panel)
             self.assertIn("不会被复制到公众号正文",review_panel)
-            self.assertEqual(manifest["template_version"],"2.2.0")
+            self.assertEqual(manifest["template_version"],"2.3.0")
 
     def test_incomplete_news_package_is_downgraded_to_needs_review(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
@@ -426,9 +465,9 @@ class WechatContentTests(unittest.TestCase):
             article = (out / "公众号成稿.md").read_text(encoding="utf-8")
             page = (out / "微信版.html").read_text(encoding="utf-8")
             copy_start=page.index('id="wechat-content"')
-            self.assertNotIn("先确认自己是否属于适用人群，再安排办理。",article)
+            self.assertNotIn("内部审核：发布前复核原文。",article)
             self.assertIn('data-role="editor-review-panel"',page[:copy_start])
-            self.assertIn("先确认自己是否属于适用人群，再安排办理。",page[:copy_start])
+            self.assertIn("内部审核：发布前复核原文。",page[:copy_start])
             self.assertNotIn('data-role="editor-note"',page[copy_start:])
 
 if __name__=="__main__": unittest.main()

@@ -346,13 +346,32 @@ def render_images(directory: Path, payload: dict, theme: str, title: str, visual
     return visual.get("image_mode", "weekday_fallback") if use_bundled_base else "template_fallback"
 
 
+def is_internal_package_title(value: str) -> bool:
+    title=str(value or "").strip()
+    return (
+        not title
+        or any(token in title for token in ("内容包","新闻包","审核包","工作台"))
+        or bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}\s*新闻",title))
+    )
+
+
+def resolve_article_title(editorial: dict, date_label: str, item_count: int) -> str:
+    explicit=str(editorial.get("article_title") or "").strip()
+    if explicit:
+        return explicit
+    legacy=str(editorial.get("title") or "").strip()
+    if not is_internal_package_title(legacy):
+        return legacy
+    return f"{date_label}国内要闻：{item_count}条变化值得关注"
+
+
 def build_article(payload: dict):
     items = payload["items"]
     if payload["content_type"] == "daily-news":
         editorial=payload.get("editorial") or {}
         start=datetime.fromisoformat(payload["window"]["start"]); end=datetime.fromisoformat(payload["window"]["end"])
         date_label=f"{start.month}月{start.day}日"
-        title = editorial.get("title") or f"{date_label}国内新闻梳理：{len(items)}条变化值得继续关注"
+        title = resolve_article_title(editorial,date_label,len(items))
         overview=normalize_overview(editorial.get("overview"),[item.get("summary") or item.get("title","") for item in items])
         window_text=f"北京时间 {start.year}年{start.month}月{start.day}日{start:%H:%M}—{end.month}月{end.day}日{end:%H:%M}"
         lines = [f"# {title}", "", "<!-- role:time-window -->", f"> 统计时段：{window_text}。", "", "## 30秒速览", ""]
@@ -370,6 +389,9 @@ def build_article(payload: dict):
             for section_label, section_text in sections:
                 if section_text:
                     lines += ["", "<!-- role:section-label -->", f"**{section_label}**", "", section_text]
+            reader_tip=item.get("reader_tip")
+            if isinstance(reader_tip,str) and reader_tip.strip():
+                lines += ["", "<!-- role:reader-tip -->", f"> **读者提示：** {reader_tip.strip()}"]
         follow_up=filter_news_follow_up(editorial.get("follow_up") or [], [item.get("title","") for item in items])
         if follow_up:
             lines += ["", "## 今天值得关注", "", *[f"- {text}" for text in follow_up]]
@@ -458,6 +480,7 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
             content=inline(line[2:],primary)
             if pending_role == "time-window": blocks.append(f'<blockquote data-role="time-window" style="margin:18px 0;padding:14px 16px;border:1px solid {primary}2E;border-left:4px solid {primary};background:{bg};border-radius:10px;box-shadow:0 4px 12px {primary}12;color:{ink};font-size:15px;line-height:1.8">{content}</blockquote>')
             elif pending_role == "keywords": blocks.append(f'<p data-role="keywords" style="margin:10px 0 20px;padding:12px 15px;border-left:4px solid {primary};border-radius:8px;background:{bg};color:{ink};font-size:14px;line-height:1.8;overflow-wrap:anywhere">{content}</p>')
+            elif pending_role == "reader-tip": blocks.append(f'<blockquote data-role="reader-tip" style="margin:18px 0;padding:14px 16px;background:{bg};border:1px solid {primary}26;border-left:4px solid {accent};border-radius:10px;box-shadow:0 4px 12px {primary}0D;color:{ink};font-size:15px;line-height:1.8">{content}</blockquote>')
             else: blocks.append(f'<blockquote style="margin:20px 0;padding:16px 18px;background:{bg};border:0;border-radius:8px;color:{primary};font-size:15px;line-height:1.8">{content}</blockquote>')
             pending_role=None; continue
         if line.startswith("原文地址："):

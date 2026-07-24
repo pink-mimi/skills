@@ -6,11 +6,12 @@ SPEC=importlib.util.spec_from_file_location("daily_news_research_run",SKILL/"scr
 class DailyNewsResearchTests(unittest.TestCase):
     def test_editorial_enrichment_merges_publishable_fields_by_url(self):
         raw={"items":[{"title":"全国公共服务新安排","url":"https://example.com/news","source":"官方来源","category":"society","published_at":"2026-07-22T12:00:00+08:00"}]}
-        editorial={"items":[{"url":"https://example.com/news","what_happened":"主管部门公布了新的公共服务安排。","why_it_matters":"这会影响相关服务的办理方式。","reader_action":"办理前核对适用范围和开始时间。","editor_note":"具体执行以当地主管部门通知为准。","keywords":["公共服务","办理"],"verification_status":"verified","verified_at":"2026-07-23T05:30:00+08:00","primary_sources":[{"name":"官方来源","url":"https://example.com/news"}]}]}
+        editorial={"items":[{"url":"https://example.com/news","what_happened":"主管部门公布了新的公共服务安排。","why_it_matters":"这会影响相关服务的办理方式。","reader_action":"办理前核对适用范围和开始时间。","reader_tip":"办理前再核对一次官方说明。","editor_note":"具体执行以当地主管部门通知为准。","keywords":["公共服务","办理"],"verification_status":"verified","verified_at":"2026-07-23T05:30:00+08:00","primary_sources":[{"name":"官方来源","url":"https://example.com/news"}]}]}
         merged=run.merge_editorial_enrichment(raw,editorial)
         item=merged["items"][0]
         for field in ("what_happened","why_it_matters","reader_action","editor_note","keywords"):
             self.assertTrue(item[field],field)
+        self.assertEqual(item["reader_tip"],"办理前再核对一次官方说明。")
         self.assertEqual(item["verification_status"],"verified")
 
     def test_editorial_workbench_lists_missing_fields_instead_of_claiming_completion(self):

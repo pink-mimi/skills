@@ -112,7 +112,7 @@ def editorial_complete(row,required):
 
 def merge_editorial_enrichment(raw, editorial):
     """Merge agent-verified editorial fields without replacing collection evidence."""
-    allowed={"what_happened","why_it_matters","reader_action","editor_note","keywords","summary","verification_status","verified_at","primary_sources","background_sources","verification_notes","recheck_before_publish","china_relevance","china_relevance_reason","impact_level"}
+    allowed={"what_happened","why_it_matters","reader_action","reader_tip","editor_note","keywords","summary","verification_status","verified_at","primary_sources","background_sources","verification_notes","recheck_before_publish","china_relevance","china_relevance_reason","impact_level"}
     enriched={}
     for item in editorial.get("items",[]):
         keys=(str(item.get("event_id") or "").strip(),str(item.get("url") or "").strip(),str(item.get("title") or "").strip())
@@ -135,6 +135,7 @@ def build_editorial_workbench(queue):
     for value in queue:
         row={key:value.get(key) for key in ("event_id","title","url","category","verification_status","primary_sources","discovery_sources")}
         row.update({field:value.get(field) or ([] if field=="keywords" else "") for field in required})
+        row["reader_tip"]=value.get("reader_tip") or ""
         row["missing_fields"]=[field for field in required if not row.get(field)]
         items.append(row)
     return {"schema_version":1,"status":"awaiting_editorial_enrichment","instructions":"逐条打开原文核验，补齐编辑字段后使用 --editorial-input 重新 build。","items":items}
