@@ -50,6 +50,30 @@ class WechatContentTests(unittest.TestCase):
         self.assertEqual(title,"7月19日国内要闻：1条变化值得关注")
         self.assertNotIn("新闻内容包",article)
 
+    def test_article_title_is_normalized_to_dated_domestic_news_prefix(self):
+        from rendering import resolve_article_title
+        editorial={"article_title":"昨日坐标：从外交、安全到AI治理的6条变化"}
+        self.assertEqual(
+            resolve_article_title(editorial,"7月24日",6),
+            "7月24日国内要闻：从外交、安全到AI治理的6条变化",
+        )
+
+    def test_compliant_article_title_is_preserved(self):
+        from rendering import resolve_article_title
+        editorial={"article_title":"7月24日国内要闻：外交与公共安全动态密集"}
+        self.assertEqual(
+            resolve_article_title(editorial,"7月24日",6),
+            "7月24日国内要闻：外交与公共安全动态密集",
+        )
+
+    def test_wrong_date_article_title_uses_window_start_date(self):
+        from rendering import resolve_article_title
+        editorial={"article_title":"7月25日国内要闻：外交与公共安全动态密集"}
+        self.assertEqual(
+            resolve_article_title(editorial,"7月24日",6),
+            "7月24日国内要闻：外交与公共安全动态密集",
+        )
+
     def test_reader_tip_is_copied_while_editor_note_stays_external(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
         fixture["items"][0]["reader_tip"]="选择服务前，先确认适用范围和办理时间。"
@@ -160,7 +184,7 @@ class WechatContentTests(unittest.TestCase):
             self.assertNotIn('src="images/',page)
             self.assertIn("images/新闻一日脉络.png",article)
             self.assertNotIn("images/项目-01.png",article)
-            self.assertIn("7月19日国内新闻梳理",article)
+            self.assertIn("7月19日国内要闻：1条变化值得关注",article)
             self.assertIn("参考来源",article)
             self.assertIn('<a href="https://example.com/news"',page)
             self.assertIn("原文地址：https://example.com/news",page)
@@ -245,7 +269,7 @@ class WechatContentTests(unittest.TestCase):
             self.assertIn("border-radius:8px",keyword_card)
             self.assertIn("border-radius:10px",review_panel)
             self.assertIn("不会被复制到公众号正文",review_panel)
-            self.assertEqual(manifest["template_version"],"2.3.0")
+            self.assertEqual(manifest["template_version"],"2.4.0")
 
     def test_incomplete_news_package_is_downgraded_to_needs_review(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))

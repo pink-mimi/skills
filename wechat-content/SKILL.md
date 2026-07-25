@@ -14,7 +14,7 @@ description: Use when 用户已有标准内容包，需要制作“未完地图�
 1. 读取内容包并验证 `schema_version: 1`。
 2. 必须读取对应栏目规范：新闻读 [references/daily-news.md](references/daily-news.md)，GitHub 热门读 [references/github-hot.md](references/github-hot.md)。
 3. 新闻读者正文必须包含 `what_happened`、`why_it_matters`、`reader_action` 和 `keywords`；可选的 `reader_tip` 渲染为面向读者的正文提示卡。缺少必填字段时不得假装成稿完整，必须标记 `needs_review` 并禁用复制按钮。读者字段完整时允许复制；存在 `partial` 或 `unverified` 时，必须在复制区外提示发布前核验，并明确不得把成功复制视为发布就绪。`editor_note`、核验状态和审核要求只供运营者查看，不得进入读者正文。
-4. 读取 [references/visual-and-copy.md](references/visual-and-copy.md) 和 [references/image2-workflow.md](references/image2-workflow.md)，生成标题、摘要、Markdown、内联样式 HTML 和内容相关图片。
+4. 读取 [references/visual-and-copy.md](references/visual-and-copy.md) 和 [references/image2-workflow.md](references/image2-workflow.md)，生成标题、摘要、Markdown、内联样式 HTML 和内容相关图片。每日新闻标题必须规范为统计窗口起始日加 `国内要闻：主题概括`，上游 `article_title` 不得绕过此前缀。
    - `daily-news` 使用按北京时间星期选择的“七天七色”主题；只有配置缺失或日期异常时才使用中性“默认兜底”。
    - `github-hot` 使用独立的开源栏目主题，不参与新闻星期轮换。
    - 已生成当期 Image 2 无字图时，传入 `--image-input-dir`；否则使用对应星期素材。

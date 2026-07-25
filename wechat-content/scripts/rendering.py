@@ -356,13 +356,15 @@ def is_internal_package_title(value: str) -> bool:
 
 
 def resolve_article_title(editorial: dict, date_label: str, item_count: int) -> str:
+    prefix=f"{date_label}国内要闻："
     explicit=str(editorial.get("article_title") or "").strip()
     if explicit:
-        return explicit
-    legacy=str(editorial.get("title") or "").strip()
-    if not is_internal_package_title(legacy):
-        return legacy
-    return f"{date_label}国内要闻：{item_count}条变化值得关注"
+        topic=re.sub(r"^\d{1,2}月\d{1,2}日国内要闻[：:]\s*","",explicit).strip()
+        if topic == explicit and re.match(r"^[^：:]+[：:]",explicit):
+            topic=re.split(r"[：:]",explicit,maxsplit=1)[1].strip()
+        if topic:
+            return f"{prefix}{topic}"
+    return f"{prefix}{item_count}条变化值得关注"
 
 
 def build_article(payload: dict):
