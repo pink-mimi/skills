@@ -7,7 +7,7 @@ description: Use when 用户需要发现并核验执行时刻前连续 7 天的 
 
 ## 核心原则
 
-发现 12—20 个候选，至少深度核验 8 个，默认精选 5 个（允许 5—7 个）。候选必须有连续 7 天窗口内的本周热度证据，新爆款优先，重新走红的成熟项目最多 2 个。AI 项目最多 3 个，同类项目最多 3 个，最近 8 期默认去重；不足 5 个合格项目时标记 `needs_review`。输出固定为平台无关的 `schema_version: 2`，契约见 [references/content-package-v2.md](references/content-package-v2.md)。
+发现 16—30 个候选，至少深度核验 10 个，默认精选 10 个（允许 8—10 个）。候选必须有连续 7 天窗口内的本周热度证据，新爆款优先，重新走红的成熟项目最多 2 个。AI 项目最多 5 个，同类项目最多 4 个，最近 8 期默认去重；不足 8 个合格项目时标记 `needs_review`。输出固定为平台无关的 `schema_version: 2`，契约见 [references/content-package-v2.md](references/content-package-v2.md)。
 
 ## 工作流程
 

@@ -275,11 +275,12 @@ class WechatContentTests(unittest.TestCase):
             out = self.build("github-hot-content-package-v2.json", temp)
             article = (out / "公众号成稿.md").read_text(encoding="utf-8")
             self.assertIn("01 · AI Agent 工具", article)
-            self.assertIn("一句话推荐", article)
+            self.assertIn("描述：", article)
+            self.assertIn("一句话概况", article)
+            self.assertIn("重点内容", article)
             self.assertIn("本地整理文件", article)
             self.assertIn("适合谁？", article)
-            self.assertIn("上手条件：", article)
-            self.assertIn("需要命令行和 API 密钥", article)
+            self.assertNotIn("上手条件：", article)
 
     def test_github_v2_weekly_stars_null_is_omitted_not_zero(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -330,7 +331,7 @@ class WechatContentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             out = self.build("github-hot-content-package-v2.json", temp)
             article = (out / "公众号成稿.md").read_text(encoding="utf-8")
-            for value in ("project", "Python", "19,160", "1,909", "需要命令行和 API 密钥"):
+            for value in ("project", "Python", "19,160", "1,909", "https://github.com/example/project"):
                 self.assertIn(value, article)
 
     def test_github_editorial_html_has_project_hierarchy_and_metric_badges(self):
@@ -424,6 +425,19 @@ class WechatContentTests(unittest.TestCase):
             manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["project_images"][0]["image_mode"], "live_image2")
             self.assertIn("项目用途示意图", (out / "公众号成稿.md").read_text(encoding="utf-8"))
+
+    def test_github_image2_cover_is_used_when_cover_png_is_supplied(self):
+        with tempfile.TemporaryDirectory() as temp:
+            generated = Path(temp) / "image2"
+            self.write_png(generated / "cover.png", (12, 44, 70))
+            out = self.build(
+                "github-hot-content-package-v2.json",
+                temp,
+                extra=["--image-input-dir", str(generated), "--image-mode", "auto"],
+            )
+            manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["cover_image_mode"], "live_image2")
+            self.assertEqual(manifest["image_mode"], "template_fallback")
 
     def test_invalid_or_missing_image2_uses_local_project_card(self):
         with tempfile.TemporaryDirectory() as temp:

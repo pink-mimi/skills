@@ -337,7 +337,13 @@ def render_images(
     palette = tuple(visual["palette"]) if visual else PALETTES[theme]
     kicker = "昨日大事 · 每日观察" if payload["content_type"] == "daily-news" else "GitHub 热门 · 每周精选"
     use_bundled_base = payload["content_type"] == "daily-news" and visual and Path(visual["cover_path"]).exists()
-    cover_base = Path(visual["cover_path"]) if use_bundled_base else None
+    use_github_cover_base = (
+        payload["content_type"] == "github-hot"
+        and visual
+        and visual.get("cover_image_mode") == "live_image2"
+        and Path(visual.get("cover_path") or "").exists()
+    )
+    cover_base = Path(visual["cover_path"]) if (use_bundled_base or use_github_cover_base) else None
     wide = cover_panel((900, 383), title, kicker, palette, base_path=cover_base)
     square = cover_panel((383, 383), title, kicker, palette, square=True, base_path=cover_base)
     combined = Image.new("RGB", (1283, 383), palette[0]); combined.paste(wide, (0, 0)); combined.paste(square, (900, 0))

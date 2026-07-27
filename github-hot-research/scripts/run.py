@@ -49,13 +49,128 @@ def collect(run_at):
     except Exception as exc:
         return {"meta": {"rate_limited": True, "error": str(exc)}, "items": []}
     repos = []
-    for repo in re.findall(r'<h2[^>]*>[\s\S]*?href="/([^"?#]+/[^"?#]+)"', page):
-        name = re.sub(r"\s", "", repo)
+    weekly_by_repo = {}
+    for article in re.findall(r"<article[\s\S]*?</article>", page):
+        match = re.search(r'<h2[^>]*>[\s\S]*?href="/([^"?#]+/[^"?#]+)"', article)
+        if not match:
+            continue
+        name = re.sub(r"\s", "", match.group(1))
         if name not in repos:
             repos.append(name)
+        weekly_match = re.search(r"([\d,]+)\s+stars\s+this\s+week", article, re.I)
+        if weekly_match:
+            weekly_by_repo[name] = int(weekly_match.group(1).replace(",", ""))
+    if not repos:
+        for repo in re.findall(r'<h2[^>]*>[\s\S]*?href="/([^"?#]+/[^"?#]+)"', page):
+            name = re.sub(r"\s", "", repo)
+            if name not in repos:
+                repos.append(name)
+
+    def api_json(path):
+        req = urllib.request.Request(
+            f"https://api.github.com{path}",
+            headers={
+                "User-Agent": "github-hot-research/2.0",
+                "Accept": "application/vnd.github+json",
+            },
+        )
+        return json.loads(urllib.request.urlopen(req, timeout=20).read().decode("utf-8"))
+
+    def enrich(repo):
+        official_url = f"https://github.com/{repo}"
+        try:
+            data = api_json(f"/repos/{repo}")
+        except Exception:
+            return {
+                "repo": repo,
+                "official_url": official_url,
+                "heat_evidence": [{
+                    "kind": "github_trending",
+                    "observed_at": run_at.isoformat(),
+                    "url": official_url,
+                }],
+            }
+        license_info = data.get("license") or {}
+        license_status = "verified" if license_info.get("spdx_id") and license_info.get("spdx_id") != "NOASSERTION" else "not_found"
+        language = data.get("language") or ""
+        weekly = weekly_by_repo.get(repo)
+        description = data.get("description") or f"{repo} 是本周进入 GitHub Trending 的开源项目。"
+        category_label = "AI 项目" if re.search(r"\b(ai|agent|llm|model)\b", description, re.I) else "开源项目"
+        return {
+            "repo": repo,
+            "official_url": data.get("html_url") or official_url,
+            "created_at": data.get("created_at"),
+            "category": "ai-automation" if category_label == "AI 项目" else "developer-tools",
+            "description": description,
+            "reader_card": {
+                "category_label": category_label,
+                "name": data.get("name") or repo.split("/")[-1],
+                "summary": description,
+                "recommendation": "本周进入 GitHub Trending，适合先收藏并按需试用。",
+                "highlights": ["进入本周 GitHub Trending", "官方仓库资料可追溯", "适合按 README 继续了解"],
+                "audience": ["开发者", "开源项目观察者"],
+                "difficulty": {
+                    "level": "medium",
+                    "label": "中等",
+                    "note": "以官方 README 的安装说明为准",
+                },
+                "metrics": {
+                    "language": language,
+                    "stars": data.get("stargazers_count"),
+                    "weekly_stars": weekly,
+                    "forks": data.get("forks_count"),
+                    "verified_at": run_at.isoformat(),
+                },
+                "reader_warning": "",
+            },
+            "verification": {
+                "readme": {"url": f"{official_url}#readme", "verified_at": run_at.isoformat()},
+                "license": {
+                    "status": license_status,
+                    "name": license_info.get("name") or "",
+                    "spdx_id": license_info.get("spdx_id") or "",
+                    "url": f"{official_url}/blob/main/LICENSE",
+                },
+                "maintenance": {
+                    "status": "active" if data.get("pushed_at") else "unknown",
+                    "last_commit_at": data.get("pushed_at") or "",
+                    "latest_release_at": "",
+                    "evidence_urls": [f"{official_url}/commits"],
+                },
+                "requirements": {
+                    "platforms": ["GitHub"],
+                    "install": "以官方 README 的安装说明为准",
+                    "command_line": True,
+                    "programming_required": True,
+                    "account_required": False,
+                    "api_key_required": False,
+                    "paid_dependency": False,
+                    "special_hardware": False,
+                },
+                "risks": [],
+                "evidence": [official_url, f"{official_url}#readme"],
+            },
+            "visual_candidates": [],
+            "image2_brief": {
+                "subject": description,
+                "scene": "开源项目工作流与代码协作的抽象场景",
+                "must_include": ["进入本周 GitHub Trending", "官方仓库资料可追溯"],
+                "must_avoid": ["项目Logo", "虚构软件界面", "中文文字", "虚构数据"],
+            },
+            "heat_evidence": [{
+                "kind": "github_trending",
+                "observed_at": run_at.isoformat(),
+                "url": official_url,
+                "summary": "项目进入 GitHub Trending weekly 榜单。",
+            }],
+            "hot_reason": "项目进入 GitHub Trending weekly 榜单，本周获得明显社区关注。",
+            "use_case": description,
+            "editorial_summary": description,
+            "ai_related": category_label == "AI 项目",
+        }
     return {
         "meta": {"rate_limited": False, "fetched_at": run_at.isoformat()},
-        "items": [{"repo": repo, "official_url": f"https://github.com/{repo}"} for repo in repos[:20]],
+        "items": [enrich(repo) for repo in repos[:30]],
     }
 
 

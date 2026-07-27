@@ -102,7 +102,7 @@ def candidate(index, *, ai=False, category=None, weekly_stars=500, license_statu
     }
 
 
-def raw_candidates(count=12):
+def raw_candidates(count=18):
     return {
         "meta": {"rate_limited": False, "fetched_at": RUN_AT.isoformat()},
         "items": [candidate(index, ai=index <= 3) for index in range(1, count + 1)],
@@ -142,21 +142,21 @@ class GithubHotResearchTests(unittest.TestCase):
             )
             self.assertEqual((data["schema_version"], data["content_type"]), (2, "github-hot"))
 
-    def test_default_target_is_five_and_selection_allows_five_to_seven(self):
+    def test_default_target_is_ten_and_selection_allows_eight_to_ten(self):
         package = self.build()
         selection = package.get("selection") or {}
-        self.assertEqual(selection.get("selected_count"), 5)
-        self.assertEqual((selection.get("minimum"), selection.get("maximum")), (5, 7))
+        self.assertEqual(selection.get("selected_count"), 10)
+        self.assertEqual((selection.get("minimum"), selection.get("maximum")), (8, 10))
 
-    def test_fewer_than_five_selected_is_needs_review(self):
-        package = self.build(raw_candidates(4))
+    def test_fewer_than_eight_selected_is_needs_review(self):
+        package = self.build(raw_candidates(7))
         self.assertEqual(package["status"], "needs_review")
 
-    def test_selection_never_exceeds_seven(self):
+    def test_selection_never_exceeds_ten(self):
         config = deepcopy(CONFIG)
-        config["selection"]["target"] = 9
-        package = self.build(raw_candidates(20), config)
-        self.assertEqual(len(package["items"]), 7)
+        config["selection"]["target"] = 12
+        package = self.build(raw_candidates(24), config)
+        self.assertEqual(len(package["items"]), 10)
 
     def test_each_selected_project_has_exactly_three_highlights(self):
         package = self.build()
@@ -207,11 +207,11 @@ class GithubHotResearchTests(unittest.TestCase):
     def test_ai_projects_are_capped_at_three(self):
         raw = raw_candidates()
         for index, item in enumerate(raw["items"], 1):
-            item["ai_related"] = index <= 6
+            item["ai_related"] = index <= 8
             item["weekly_stars"] = 1000 - index
             item["reader_card"]["metrics"]["weekly_stars"] = 1000 - index
         package = self.build(raw)
-        self.assertLessEqual(sum(bool(item["ai_related"]) for item in package["items"]), 3)
+        self.assertLessEqual(sum(bool(item["ai_related"]) for item in package["items"]), 5)
 
     def test_package_has_schema_v2_top_level_fields(self):
         package = self.build()

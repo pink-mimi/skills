@@ -10,7 +10,11 @@ from pathlib import Path
 
 from rendering import build_article as build_legacy_article, build_html, render_images
 from github_hot_column import article_section_hash, build_article as build_github_hot_article
-from github_hot_visuals import select_project_images, select_theme as select_github_theme
+from github_hot_visuals import (
+    select_project_images,
+    select_theme as select_github_theme,
+    valid_project_image,
+)
 from news_visuals import choose_news_visual, valid_live_pair
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -239,8 +243,14 @@ def main() -> None:
                 github_theme["primary"],
                 github_theme["accent"],
                 "#F28C45",
-            ]
+            ],
+            "cover_image_mode": "template_fallback",
+            "cover_path": "",
         }
+        cover_path = args.image_input_dir / "cover.png" if args.image_input_dir else None
+        if cover_path and valid_project_image(cover_path, int(config["images"]["maximum_bytes"])):
+            visual["cover_image_mode"] = "live_image2"
+            visual["cover_path"] = cover_path
         project_images = select_project_images(
             payload,
             args.project_image_dir,
@@ -274,6 +284,7 @@ def main() -> None:
             ]
         if github_theme:
             manifest["github_theme"] = github_theme
+            manifest["cover_image_mode"] = visual.get("cover_image_mode", "template_fallback")
             manifest["opening_hash"] = article_section_hash(article, "opening")
             manifest["closing_hash"] = article_section_hash(article, "closing")
         if visual and payload["content_type"] == "daily-news":

@@ -102,7 +102,6 @@ def build_project(item, index):
         parts.append(f"本周 +{metric(metrics['weekly_stars'])}")
     if metrics.get("forks") is not None:
         parts.append(f"{metric(metrics['forks'])} Fork")
-    difficulty = card.get("difficulty") or {}
     return [
         "<!-- github-project:start -->",
         "",
@@ -112,27 +111,21 @@ def build_project(item, index):
         "",
         f"### {card.get('name') or item['repo']}",
         "",
-        card.get("summary") or "",
-        "",
-        "**为什么这周火？**",
-        "",
-        edit["hot_reason"],
-        "",
-        edit["summary"],
+        f"**描述：** {card.get('summary') or edit.get('summary') or ''}",
         "",
         f"![{image_label(item)}](images/项目-{index:02d}.png)",
         "",
         f"<!-- github-metrics:{'|'.join(parts)} -->",
         "",
-        f"> **一句话推荐**　{card.get('recommendation') or edit['use_case']}",
+        f"> **一句话概况**　{card.get('recommendation') or edit['use_case']}",
+        "",
+        "**重点内容**",
         "",
         *[f"- {value}" for value in card.get("highlights") or []],
         "",
         f"**适合谁？**　{'、'.join(card.get('audience') or [])}",
         "",
-        f"**上手条件：**　{difficulty.get('note') or difficulty.get('label') or '以官方说明为准'}",
-        "",
-        f"**项目地址：** [{item['repo']}]({item['official_url']})",
+        f"**项目地址：** [{item['official_url']}]({item['official_url']})",
         "",
         "<!-- github-project:end -->",
     ]

@@ -134,6 +134,7 @@ class EditorialMaterialTests(unittest.TestCase):
         for index in range(1, 6):
             item = complete_candidate(index)
             item["category"] = "developer-tools"
+            item["reader_card"]["category_label"] = "开发工具"
             heat = EDITORIAL.assess_heat(
                 item,
                 "2026-07-20T09:00:00+08:00",
@@ -143,6 +144,7 @@ class EditorialMaterialTests(unittest.TestCase):
             selected.append(item)
         material = EDITORIAL.derive_weekly_editorial(selected)
         self.assertEqual(material["opening_mode"], "theme")
+        self.assertEqual(material["weekly_theme"], "开发工具")
         self.assertTrue(material["theme_evidence"])
         allowed = {item["repo"] for item in selected}
         self.assertTrue({row["repo"] for row in material["theme_evidence"]} <= allowed)

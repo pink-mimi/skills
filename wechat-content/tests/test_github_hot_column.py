@@ -98,14 +98,32 @@ class GithubHotColumnTests(unittest.TestCase):
     def test_project_uses_approved_editorial_card_order(self):
         article, _, _ = COLUMN.build_article(payload_five())
         positions = [
-            article.index("为什么这周火"),
+            article.index("描述"),
             article.index("项目官方截图"),
-            article.index("一句话推荐"),
+            article.index("一句话概况"),
+            article.index("重点内容"),
             article.index("适合谁"),
-            article.index("上手条件"),
             article.index("项目地址"),
         ]
         self.assertEqual(positions, sorted(positions))
+
+    def test_project_uses_compact_reader_fields(self):
+        article, _, _ = COLUMN.build_article(payload_five())
+        for phrase in ("**描述：**", "**一句话概况**", "**重点内容**", "**适合谁？**", "**项目地址：**"):
+            self.assertIn(phrase, article)
+        self.assertNotIn("**为什么这周火？**", article)
+        self.assertNotIn("**上手条件：**", article)
+
+    def test_project_address_shows_full_github_url(self):
+        article, _, _ = COLUMN.build_article(payload_five())
+        self.assertIn(
+            "**项目地址：** [https://github.com/example/project-1](https://github.com/example/project-1)",
+            article,
+        )
+        self.assertNotIn(
+            "**项目地址：** [example/project-1](https://github.com/example/project-1)",
+            article,
+        )
 
     def test_reader_copy_omits_audit_burden(self):
         article, _, _ = COLUMN.build_article(payload_five())

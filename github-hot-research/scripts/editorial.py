@@ -68,6 +68,8 @@ def project_editorial(candidate, heat):
     ).strip()
     if summary and len(summary) < 40 and use_case and use_case not in summary:
         summary = f"{use_case}{summary}"
+    if summary and len(summary) < 40 and card.get("recommendation"):
+        summary = f"{summary}，{card['recommendation']}"
     return {
         "hot_reason": hot_reason,
         "hot_reason_evidence": list(heat.get("evidence") or []),
@@ -82,7 +84,11 @@ def derive_weekly_editorial(selected):
         category_groups.setdefault(str(item.get("category") or "其他"), []).append(item)
     dominant = max(category_groups.values(), key=len, default=[])
     has_theme = len(dominant) >= 3
-    theme = str(dominant[0].get("category") or "") if has_theme else ""
+    theme = str(
+        ((dominant[0].get("reader_card") or {}).get("category_label"))
+        or dominant[0].get("category")
+        or ""
+    ) if has_theme else ""
     return {
         "opening_mode": "theme" if has_theme else "multiple_routes",
         "weekly_theme": theme,
