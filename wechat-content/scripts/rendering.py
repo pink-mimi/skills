@@ -629,6 +629,26 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
     for raw in markdown.splitlines():
         line = raw.strip()
         if not line: continue
+        github_marker = re.fullmatch(
+            r"<!-- github-(?:opening|project|closing):(?:start|end) -->",
+            line,
+        )
+        if github_marker:
+            continue
+        github_metrics = re.fullmatch(r"<!-- github-metrics:(.+) -->", line)
+        if github_metrics:
+            badges = "".join(
+                f'<span style="display:inline-block;margin:0 8px 8px 0;padding:5px 10px;'
+                f'border:1px solid {primary}2E;border-radius:999px;background:{bg};'
+                f'color:{ink};font-size:13px;line-height:1.5">{html.escape(metric.strip())}</span>'
+                for metric in github_metrics.group(1).split("|")
+                if metric.strip()
+            )
+            blocks.append(
+                f'<section data-role="github-metrics" style="margin:12px 0 18px;'
+                f'font-size:0">{badges}</section>'
+            )
+            continue
         role_match = re.fullmatch(r"<!-- role:([a-z-]+) -->", line)
         if role_match:
             pending_role = role_match.group(1)
@@ -640,6 +660,7 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
         if line == "---": blocks.append(f'<div style="height:1px;background:{primary}22;margin:34px 0"></div>'); continue
         if line.startswith("# "): continue
         if line.startswith("## "): blocks.append(f'<section style="margin:30px 0 16px"><div style="width:36px;height:4px;margin-bottom:10px;border-radius:2px;background:{primary}"></div><h2 style="font-size:22px;line-height:1.5;color:{ink};margin:0;font-weight:800">{inline(line[3:],primary)}</h2></section>'); continue
+        if line.startswith("### "): blocks.append(f'<h3 data-role="github-project-name" style="margin:6px 0 12px;color:{ink};font-size:25px;line-height:1.35;font-weight:850;letter-spacing:-.02em">{inline(line[4:],primary)}</h3>'); continue
         if line.startswith("> "):
             content=inline(line[2:],primary)
             if pending_role == "time-window": blocks.append(f'<blockquote data-role="time-window" style="margin:18px 0;padding:14px 16px;border:1px solid {primary}2E;border-left:4px solid {primary};background:{bg};border-radius:10px;box-shadow:0 4px 12px {primary}12;color:{ink};font-size:15px;line-height:1.8">{content}</blockquote>')

@@ -299,6 +299,15 @@ class WechatContentTests(unittest.TestCase):
             for value in ("project", "Python", "19,160", "1,909", "需要命令行和 API 密钥"):
                 self.assertIn(value, article)
 
+    def test_github_editorial_html_has_project_hierarchy_and_metric_badges(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = self.build("github-hot-content-package-v2.json", temp)
+            page = (out / "微信版.html").read_text(encoding="utf-8")
+            copy = page.split('id="wechat-content"', 1)[1].split("</article>", 1)[0]
+            self.assertIn('data-role="github-metrics"', copy)
+            self.assertIn('data-role="github-project-name"', copy)
+            self.assertNotIn("&lt;!-- github-", copy)
+
     def test_approved_official_image_has_priority_over_image2(self):
         with tempfile.TemporaryDirectory() as temp:
             official = Path(temp) / "official"
