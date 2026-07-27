@@ -17,6 +17,20 @@
     "maximum": 7,
     "target": 5
   },
+  "editorial": {
+    "opening_mode": "multiple_routes",
+    "weekly_theme": "",
+    "theme_evidence": [],
+    "title_options": [
+      "这周突然走红的开源项目：把本地自动化做得更清楚"
+    ],
+    "editorial_angles": [
+      "帮助用户在本地整理文件和执行自动化任务"
+    ],
+    "closing_observations": [
+      "项目把零散的本地自动化步骤整理成更容易理解和复用的工作流程。"
+    ]
+  },
   "items": [
     {
       "rank": 1,
@@ -25,6 +39,30 @@
       "homepage_url": "https://example.com",
       "category": "ai-agent",
       "ai_related": true,
+      "heat": {
+        "eligible": true,
+        "heat_class": "new_breakout",
+        "evidence": [
+          {
+            "kind": "github_trending",
+            "observed_at": "2026-07-25T08:00:00+08:00",
+            "url": "https://github.com/example/project"
+          }
+        ],
+        "rejection_reasons": []
+      },
+      "editorial": {
+        "hot_reason": "项目发布完整的本地自动化示例后进入本周 GitHub Trending。",
+        "hot_reason_evidence": [
+          {
+            "kind": "github_trending",
+            "observed_at": "2026-07-25T08:00:00+08:00",
+            "url": "https://github.com/example/project"
+          }
+        ],
+        "use_case": "帮助用户在本地整理文件和执行自动化任务。",
+        "summary": "如果你需要整理重复的本地任务，这个项目提供了从文件处理到自动执行的清晰路径，并给出了可以验证的示例。"
+      },
       "reader_card": {
         "category_label": "AI Agent 工具",
         "name": "project",

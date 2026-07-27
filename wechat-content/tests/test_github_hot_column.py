@@ -1,0 +1,98 @@
+import importlib.util
+import json
+import unittest
+from copy import deepcopy
+from pathlib import Path
+
+
+SKILL = Path(__file__).resolve().parents[1]
+SPEC = importlib.util.spec_from_file_location(
+    "github_hot_column", SKILL / "scripts/github_hot_column.py"
+)
+COLUMN = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(COLUMN)
+
+
+def payload_five(theme=True):
+    base = json.loads(
+        (SKILL / "tests/fixtures/github-hot-content-package-v2.json").read_text(encoding="utf-8")
+    )
+    items = []
+    categories = ["ai-agent", "ai-agent", "ai-agent", "developer-tools", "data"]
+    for index, category in enumerate(categories, 1):
+        item = deepcopy(base["items"][0])
+        item["rank"] = index
+        item["repo"] = f"example/project-{index}"
+        item["official_url"] = f"https://github.com/example/project-{index}"
+        item["category"] = category if theme else f"route-{index}"
+        item["reader_card"]["name"] = f"project-{index}"
+        item["reader_card"]["category_label"] = "AI Agent" if index <= 3 else "开发工具"
+        item["reader_card"]["metrics"]["weekly_stars"] = 1800 - index * 100
+        item["heat"] = {
+            "eligible": True,
+            "heat_class": "new_breakout",
+            "evidence": [{"kind": "github_trending", "url": item["official_url"], "observed_at": "2026-07-26T08:00:00+08:00"}],
+            "rejection_reasons": [],
+        }
+        item["editorial"] = {
+            "hot_reason": f"project-{index} 发布完整示例后进入本周 GitHub Trending。",
+            "hot_reason_evidence": item["heat"]["evidence"],
+            "use_case": "帮助开发者把复杂工具变成可复用的工作流程。",
+            "summary": "如果你正在整理自动化流程，这个项目提供了从理解问题到完成配置的清晰路径，并附有可以验证的示例。",
+        }
+        item["_project_image"] = {"image_mode": "official_verified"}
+        items.append(item)
+    base["items"] = items
+    base["selection"]["selected_count"] = 5
+    base["editorial"] = {
+        "opening_mode": "theme" if theme else "multiple_routes",
+        "weekly_theme": "ai-agent" if theme else "",
+        "theme_evidence": [
+            {"repo": item["repo"], "hot_reason": item["editorial"]["hot_reason"]}
+            for item in items[:3]
+        ] if theme else [],
+        "title_options": [
+            "这周突然走红的 5 个开源项目：Agent 开始走出 Demo",
+            "5 个本周新爆款，正在把复杂工具变简单",
+            "本周开源坐标：从 Agent 到开发工具",
+        ],
+        "editorial_angles": [item["editorial"]["use_case"] for item in items[:3]],
+        "closing_observations": [item["editorial"]["summary"] for item in items[:3]],
+    }
+    return base
+
+
+class GithubHotColumnTests(unittest.TestCase):
+    def test_article_has_dynamic_opening_five_projects_and_reflective_closing(self):
+        payload = payload_five()
+        article, title, _ = COLUMN.build_article(payload)
+        self.assertNotEqual(title, "本周 GitHub 热门：5 个值得关注的开源项目")
+        self.assertIn(payload["editorial"]["theme_evidence"][0]["repo"], article)
+        self.assertEqual(article.count("<!-- github-project:start -->"), 5)
+        self.assertIn("最后留一个坐标", article)
+
+    def test_project_uses_approved_editorial_card_order(self):
+        article, _, _ = COLUMN.build_article(payload_five())
+        positions = [
+            article.index("为什么这周火"),
+            article.index("项目官方截图"),
+            article.index("一句话推荐"),
+            article.index("适合谁"),
+            article.index("上手条件"),
+            article.index("项目地址"),
+        ]
+        self.assertEqual(positions, sorted(positions))
+
+    def test_reader_copy_omits_audit_burden(self):
+        article, _, _ = COLUMN.build_article(payload_five())
+        for phrase in ("未发现明确许可证", "license_status", "verified_at", "内部审核"):
+            self.assertNotIn(phrase, article)
+
+    def test_missing_common_theme_uses_multiple_routes_copy(self):
+        article, _, _ = COLUMN.build_article(payload_five(theme=False))
+        self.assertIn("几条不同路线", article)
+        self.assertNotIn("共同趋势是", article)
+
+
+if __name__ == "__main__":
+    unittest.main()

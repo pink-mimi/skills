@@ -237,11 +237,12 @@ class WechatContentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             out = self.build("github-hot-content-package-v2.json", temp)
             article = (out / "公众号成稿.md").read_text(encoding="utf-8")
-            self.assertIn("#1｜AI Agent 工具", article)
+            self.assertIn("01 · AI Agent 工具", article)
             self.assertIn("一句话推荐", article)
             self.assertIn("本地整理文件", article)
             self.assertIn("适合谁？", article)
-            self.assertIn("上手难度：中等", article)
+            self.assertIn("上手条件：", article)
+            self.assertIn("需要命令行和 API 密钥", article)
 
     def test_github_v2_weekly_stars_null_is_omitted_not_zero(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -263,12 +264,12 @@ class WechatContentTests(unittest.TestCase):
             self.assertIn("2026-07-25T10:00:00Z", before)
             self.assertIn("内部审核：最近版本仍处于快速迭代阶段。", before)
 
-    def test_github_v2_reader_warnings_include_license_and_visible_risk(self):
+    def test_github_v2_reader_copy_omits_license_and_internal_risk_burden(self):
         with tempfile.TemporaryDirectory() as temp:
             out = self.build("github-hot-content-package-v2.json", temp)
             article = (out / "公众号成稿.md").read_text(encoding="utf-8")
-            self.assertIn("未发现明确许可证", article)
-            self.assertIn("项目可以执行本地命令，应限制运行权限。", article)
+            self.assertNotIn("未发现明确许可证", article)
+            self.assertNotIn("内部审核：最近版本仍处于快速迭代阶段。", article)
 
     def test_github_v2_needs_review_is_copyable_but_not_publish_ready(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -8,7 +8,8 @@ from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
-from rendering import build_article, build_html, render_images
+from rendering import build_article as build_legacy_article, build_html, render_images
+from github_hot_column import build_article as build_github_hot_article
 from news_visuals import choose_news_visual, valid_live_pair
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -327,7 +328,10 @@ def main() -> None:
         for index, item in enumerate(payload["items"], 1):
             item["_project_image"] = by_rank.get(index, {})
     if args.command in ("build", "all"):
-        article, title, summary = build_article(payload)
+        if payload["content_type"] == "github-hot" and payload.get("schema_version") == 2:
+            article, title, summary = build_github_hot_article(payload)
+        else:
+            article, title, summary = build_legacy_article(payload)
         cover_title=resolve_cover_title(payload,title)
         image_mode = render_images(out / "images", payload, theme, cover_title, visual, project_images)
         write(out / "公众号成稿.md", article)
