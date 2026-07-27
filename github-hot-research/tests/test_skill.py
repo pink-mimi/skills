@@ -24,6 +24,12 @@ def candidate(index, *, ai=False, category=None, weekly_stars=500, license_statu
     return {
         "repo": repo,
         "official_url": f"https://github.com/{repo}",
+        "created_at": "2026-07-23T08:00:00Z",
+        "heat_evidence": [{
+            "kind": "github_trending",
+            "observed_at": "2026-07-25T09:00:00+08:00",
+            "url": f"https://github.com/{repo}",
+        }],
         "homepage_url": f"https://project-{index:02d}.example.com",
         "description": f"项目 {index} 用于整理可核验的工作资料",
         "license": license_name or "未发现明确许可证",

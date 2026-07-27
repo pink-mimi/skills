@@ -6,6 +6,8 @@
   "items": [
     {
       "repo": "example/project-01",
+      "created_at": "2026-07-23T08:00:00Z",
+      "heat_evidence": [{"kind": "github_trending", "observed_at": "2026-07-25T09:00:00+08:00", "url": "https://github.com/example/project-01"}],
       "official_url": "https://github.com/example/project-01",
       "description": "用于整理本地工作资料",
       "license": "MIT",
@@ -25,6 +27,8 @@
     },
     {
       "repo": "example/project-02",
+      "created_at": "2026-07-23T08:00:00Z",
+      "heat_evidence": [{"kind": "github_trending", "observed_at": "2026-07-25T09:00:00+08:00", "url": "https://github.com/example/project-02"}],
       "official_url": "https://github.com/example/project-02",
       "description": "用于处理结构化数据",
       "license": "Apache-2.0",
@@ -44,6 +48,8 @@
     },
     {
       "repo": "example/project-03",
+      "created_at": "2026-07-23T08:00:00Z",
+      "heat_evidence": [{"kind": "github_trending", "observed_at": "2026-07-25T09:00:00+08:00", "url": "https://github.com/example/project-03"}],
       "official_url": "https://github.com/example/project-03",
       "description": "用于自动化开发流程",
       "license": "MIT",
@@ -63,6 +69,8 @@
     },
     {
       "repo": "example/project-04",
+      "created_at": "2026-07-23T08:00:00Z",
+      "heat_evidence": [{"kind": "github_trending", "observed_at": "2026-07-25T09:00:00+08:00", "url": "https://github.com/example/project-04"}],
       "official_url": "https://github.com/example/project-04",
       "description": "用于管理个人知识库",
       "license": "GPL-3.0",
@@ -82,6 +90,8 @@
     },
     {
       "repo": "example/project-05",
+      "created_at": "2026-07-23T08:00:00Z",
+      "heat_evidence": [{"kind": "github_trending", "observed_at": "2026-07-25T09:00:00+08:00", "url": "https://github.com/example/project-05"}],
       "official_url": "https://github.com/example/project-05",
       "description": "用于生成技术文档",
       "license": "MIT",
@@ -101,6 +111,8 @@
     },
     {
       "repo": "example/project-06",
+      "created_at": "2026-07-23T08:00:00Z",
+      "heat_evidence": [{"kind": "github_trending", "observed_at": "2026-07-25T09:00:00+08:00", "url": "https://github.com/example/project-06"}],
       "official_url": "https://github.com/example/project-06",
       "description": "用于监控服务状态",
       "license": "Apache-2.0",
@@ -120,6 +132,8 @@
     },
     {
       "repo": "example/project-07",
+      "created_at": "2026-07-23T08:00:00Z",
+      "heat_evidence": [{"kind": "github_trending", "observed_at": "2026-07-25T09:00:00+08:00", "url": "https://github.com/example/project-07"}],
       "official_url": "https://github.com/example/project-07",
       "description": "用于管理测试用例",
       "license": "MIT",
@@ -139,6 +153,8 @@
     },
     {
       "repo": "example/project-08",
+      "created_at": "2026-07-23T08:00:00Z",
+      "heat_evidence": [{"kind": "github_trending", "observed_at": "2026-07-25T09:00:00+08:00", "url": "https://github.com/example/project-08"}],
       "official_url": "https://github.com/example/project-08",
       "description": "用于批量处理图片",
       "license": "MIT",
@@ -158,6 +174,8 @@
     },
     {
       "repo": "example/project-09",
+      "created_at": "2026-07-23T08:00:00Z",
+      "heat_evidence": [{"kind": "github_trending", "observed_at": "2026-07-25T09:00:00+08:00", "url": "https://github.com/example/project-09"}],
       "official_url": "https://github.com/example/project-09",
       "description": "用于分析日志",
       "license": "Apache-2.0",
@@ -177,6 +195,8 @@
     },
     {
       "repo": "example/project-10",
+      "created_at": "2026-07-23T08:00:00Z",
+      "heat_evidence": [{"kind": "github_trending", "observed_at": "2026-07-25T09:00:00+08:00", "url": "https://github.com/example/project-10"}],
       "official_url": "https://github.com/example/project-10",
       "description": "用于管理家庭服务器",
       "license": "GPL-3.0",
@@ -196,6 +216,8 @@
     },
     {
       "repo": "example/project-11",
+      "created_at": "2026-07-23T08:00:00Z",
+      "heat_evidence": [{"kind": "github_trending", "observed_at": "2026-07-25T09:00:00+08:00", "url": "https://github.com/example/project-11"}],
       "official_url": "https://github.com/example/project-11",
       "description": "用于处理表格数据",
       "license": "MIT",
@@ -215,6 +237,8 @@
     },
     {
       "repo": "example/project-12",
+      "created_at": "2026-07-23T08:00:00Z",
+      "heat_evidence": [{"kind": "github_trending", "observed_at": "2026-07-25T09:00:00+08:00", "url": "https://github.com/example/project-12"}],
       "official_url": "https://github.com/example/project-12",
       "description": "用于整理浏览器书签",
       "license": "MIT",

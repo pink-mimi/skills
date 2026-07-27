@@ -5,10 +5,17 @@ import hashlib
 import json
 import re
 import shutil
+import sys
 import urllib.request
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from editorial import assess_heat
 
 
 BJT = timezone(timedelta(hours=8))
@@ -271,6 +278,12 @@ def package_risks(raw, rows, selected, candidate_minimum, deep_minimum):
 def build(raw, run_at, config, output_root):
     start, end = window(run_at, config)
     rows = [normalize_candidate(value) for value in raw.get("items", [])]
+    for row in rows:
+        row["heat"] = assess_heat(row, start.isoformat(), end.isoformat())
+        row["rejection_reasons"] = list(
+            dict.fromkeys(row["rejection_reasons"] + row["heat"]["rejection_reasons"])
+        )
+        row["eligible"] = not row["rejection_reasons"]
     selection_config = config["selection"]
     minimum = int(selection_config["minimum"])
     maximum = int(selection_config["maximum"])
@@ -282,6 +295,7 @@ def build(raw, run_at, config, output_root):
     )
     selected = []
     ai_count = 0
+    mature_count = 0
     categories = {}
     for row in sorted(rows, key=lambda item: item["score"], reverse=True):
         reasons = list(row["rejection_reasons"])
@@ -289,6 +303,11 @@ def build(raw, run_at, config, output_root):
             reasons.append("最近 8 期已经推荐且没有重大更新")
         if row.get("ai_related") and ai_count >= int(selection_config["maximum_ai"]):
             reasons.append("AI 项目数量已达到上限")
+        if (
+            row["heat"]["heat_class"] == "mature_resurgence"
+            and mature_count >= int(config["weekly_heat"]["mature_resurgence_maximum"])
+        ):
+            reasons.append("成熟项目数量已达到上限")
         category = clean_text(row.get("category"))
         if categories.get(category, 0) >= int(selection_config["maximum_per_category"]):
             reasons.append("同一类别数量已达到上限")
@@ -301,6 +320,7 @@ def build(raw, run_at, config, output_root):
         row["rank"] = len(selected) + 1
         selected.append(row)
         ai_count += int(bool(row.get("ai_related")))
+        mature_count += int(row["heat"]["heat_class"] == "mature_resurgence")
         categories[category] = categories.get(category, 0) + 1
     discovery = config["discovery"]
     candidate_minimum = int(discovery["candidate_minimum"])

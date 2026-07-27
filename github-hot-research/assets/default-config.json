@@ -17,6 +17,11 @@
     "maximum_ai": 3,
     "maximum_per_category": 3,
     "history_lookback_weeks": 8
+  },
+  "weekly_heat": {
+    "evidence_minimum": 1,
+    "mature_resurgence_maximum": 2,
+    "prefer_new_breakouts": true
   }
 }
 
