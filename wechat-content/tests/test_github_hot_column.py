@@ -16,6 +16,11 @@ VISUAL_SPEC = importlib.util.spec_from_file_location(
 )
 VISUALS = importlib.util.module_from_spec(VISUAL_SPEC)
 VISUAL_SPEC.loader.exec_module(VISUALS)
+RENDERING_SPEC = importlib.util.spec_from_file_location(
+    "github_hot_rendering", SKILL / "scripts/rendering.py"
+)
+RENDERING = importlib.util.module_from_spec(RENDERING_SPEC)
+RENDERING_SPEC.loader.exec_module(RENDERING)
 
 
 def payload_five(theme=True):
@@ -111,6 +116,41 @@ class GithubHotColumnTests(unittest.TestCase):
         article, _, _ = COLUMN.build_article(payload_five(theme=False))
         self.assertIn("几条不同路线", article)
         self.assertNotIn("共同趋势是", article)
+
+    def test_external_audit_contains_theme_rejections_and_verification(self):
+        payload = payload_five()
+        payload["candidates"] = [{
+            "repo": "example/rejected",
+            "selected": False,
+            "rejection_reasons": ["本周热度证据不足"],
+        }]
+        for item in payload["items"]:
+            item["_project_image"] = {
+                "image_mode": "local_project_visual",
+                "license_status": "not_applicable",
+                "usage_status": "not_applicable",
+            }
+        panel = RENDERING.build_editor_review_panel(
+            payload,
+            {"review_counts": {"verified": 0, "partial": 0, "unverified": 0}},
+        )
+        for phrase in ("本期主题证据", "未入选项目", "许可证核验", "图片审核", "本周热度证据不足"):
+            self.assertIn(phrase, panel)
+
+    def test_recent_opening_and_closing_hashes_select_fresh_variants(self):
+        payload = payload_five()
+        default_opening = "\n\n".join(COLUMN.build_opening(payload))
+        default_closing = "\n\n".join(COLUMN.build_closing(payload))
+        article, _, _ = COLUMN.build_article(
+            payload,
+            history={
+                "opening_hashes": [COLUMN.hash_text(default_opening)],
+                "closing_hashes": [COLUMN.hash_text(default_closing)],
+            },
+        )
+        self.assertNotIn(default_opening, article)
+        self.assertNotIn(default_closing, article)
+        self.assertIn("本周突然升温", article)
 
 
 if __name__ == "__main__":

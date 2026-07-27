@@ -1,5 +1,19 @@
 from __future__ import annotations
 
+import hashlib
+
+
+def hash_text(value):
+    return hashlib.sha256(value.strip().encode("utf-8")).hexdigest()
+
+
+def choose_variant(candidates, rejected_hashes):
+    rejected = set(rejected_hashes or [])
+    for value in candidates:
+        if hash_text(value) not in rejected:
+            return value
+    return candidates[-1]
+
 
 def metric(value):
     return f"{int(value):,}" if value is not None else ""
@@ -12,26 +26,59 @@ def build_title(payload):
     return f"这周突然走红的 {len(payload['items'])} 个开源项目"
 
 
-def build_opening(payload):
+def build_opening_variants(payload):
     editorial = payload.get("editorial") or {}
     items = payload["items"]
     if editorial.get("opening_mode") == "theme" and editorial.get("theme_evidence"):
         evidence = editorial["theme_evidence"]
         names = "、".join(row["repo"] for row in evidence[:3])
-        return [
+        first = [
             f"过去一周，{names} 等项目集中受到关注。它们共同指向一个变化："
             f"{editorial.get('weekly_theme') or '开发者正在把复杂技术变成可以实际使用的工具'}。",
             f"我们从本周突然走红的项目中挑出 {len(items)} 个。下面不只看 Star，"
             "还会说明它们为什么火、能解决什么问题，以及谁最值得收藏。",
             "热度负责把坐标点亮，真正值得抵达的，是那些能把问题说清楚、把工具做实的项目。",
         ]
-    return [
+        return [
+            first,
+            [
+                f"本周突然升温的项目里，{names} 指向了同一条路线："
+                f"{editorial.get('weekly_theme') or '把复杂技术做成真正可用的工具'}。",
+                f"这期留下 {len(items)} 个坐标。除了热度，我们更关心它们解决什么问题、适合谁，以及上手需要什么。",
+                "数字让项目被看见，持续解决问题的能力决定它能走多远。",
+            ],
+            [
+                f"{names} 在同一周进入开发者视野，并不是偶然。"
+                f"它们都在尝试{editorial.get('weekly_theme') or '降低复杂技术的使用门槛'}。",
+                f"下面这 {len(items)} 个项目来自本周热度变化，也经过用途和维护核验。",
+                "这是一张本周开源地图，也是一份可以按需收藏的工具清单。",
+            ],
+        ]
+    first = [
         f"这一周值得关注的项目走向了几条不同路线："
         f"{'；'.join((editorial.get('editorial_angles') or [])[:3])}。",
         f"我们从本周突然走红的项目中挑出 {len(items)} 个，逐一说明它们为什么火、"
         "能解决什么问题，以及谁最值得收藏。",
         "项目之间未必共享同一个主题，但都提供了值得继续观察的新坐标。",
     ]
+    return [
+        first,
+        [
+            f"本周突然升温的项目没有挤在同一条赛道："
+            f"{'；'.join((editorial.get('editorial_angles') or [])[:3])}。",
+            f"我们留下 {len(items)} 个不同方向的项目，分别看它们为什么火、能做什么，以及上手条件。",
+            "方向不同并不妨碍它们成为本周值得保存的几个坐标。",
+        ],
+        [
+            f"这周的开源热度沿着几条不同路线展开，共有 {len(items)} 个项目值得单独说明。",
+            "它们没有被包装成一个虚假的共同趋势，而是按实际用途逐项介绍。",
+            "先看问题，再看工具；先看是否适合自己，再决定要不要收藏。",
+        ],
+    ]
+
+
+def build_opening(payload):
+    return build_opening_variants(payload)[0]
 
 
 def image_label(item):
@@ -91,7 +138,7 @@ def build_project(item, index):
     ]
 
 
-def build_closing(payload):
+def build_closing_variants(payload):
     editorial = payload.get("editorial") or {}
     observations = editorial.get("closing_observations") or []
     if editorial.get("opening_mode") == "theme":
@@ -105,7 +152,7 @@ def build_closing(payload):
             "怎样把技术变成真正可以使用的工具。"
         )
     detail = observations[0] if observations else "短期热度会变化，持续解决问题的能力更值得观察。"
-    return [
+    first = [
         "## 最后留一个坐标",
         "",
         lead,
@@ -118,18 +165,69 @@ def build_closing(payload):
         "",
         "![结尾图](images/结尾图.png)",
     ]
+    second = [
+        "## 最后留一个坐标",
+        "",
+        "本周突然升温的数字会慢慢回落，项目解决的问题却不会因此消失。",
+        "",
+        detail,
+        "",
+        "真正值得继续观察的，是它能否把一次关注变成持续维护，把一个想法变成可靠工具。",
+        "",
+        "> 热榜记录速度，时间检验价值。",
+        "",
+        "![结尾图](images/结尾图.png)",
+    ]
+    third = [
+        "## 最后留一个坐标",
+        "",
+        "把这些项目留在同一期，不是因为它们拥有相似的数字，而是因为它们各自提供了一种解决问题的方法。",
+        "",
+        detail,
+        "",
+        "下一周会有新的项目出现，但清楚的问题、可靠的维护和真实的用途，始终比短暂排名更重要。",
+        "",
+        "> 地图会更新，值得抵达的标准不必每天改变。",
+        "",
+        "![结尾图](images/结尾图.png)",
+    ]
+    return [first, second, third]
+
+
+def build_closing(payload):
+    return build_closing_variants(payload)[0]
 
 
 def build_article(payload, history=None):
     title = build_title(payload)
-    lines = [f"# {title}", ""]
-    for paragraph in build_opening(payload):
+    lines = [f"# {title}", "", "<!-- github-opening:start -->"]
+    history = history or {}
+    opening_variants = build_opening_variants(payload)
+    opening_text = choose_variant(
+        ["\n\n".join(value) for value in opening_variants],
+        history.get("opening_hashes"),
+    )
+    for paragraph in opening_text.split("\n\n"):
         lines.extend([paragraph, ""])
+    lines.append("<!-- github-opening:end -->")
     for index, item in enumerate(payload["items"], 1):
         lines.extend(build_project(item, index))
-    lines.extend(["", "---", "", *build_closing(payload)])
+    closing_variants = build_closing_variants(payload)
+    closing_text = choose_variant(
+        ["\n\n".join(value) for value in closing_variants],
+        history.get("closing_hashes"),
+    )
+    lines.extend(["", "---", "", "<!-- github-closing:start -->", *closing_text.split("\n\n"), "<!-- github-closing:end -->"])
     summary = (
         f"从过去七天突然走红的项目中精选 {len(payload['items'])} 个，"
         "说明本周热度、实际用途、核心亮点和上手条件。"
     )
     return "\n".join(lines), title, summary
+
+
+def article_section_hash(article, name):
+    start = f"<!-- github-{name}:start -->"
+    end = f"<!-- github-{name}:end -->"
+    if start not in article or end not in article:
+        return ""
+    return hash_text(article.split(start, 1)[1].split(end, 1)[0])

@@ -559,7 +559,7 @@ def build_editor_review_panel(payload: dict, copy_state: dict) -> str:
                 '<section style="margin:10px 0;padding:12px;border-top:1px solid #E2E8F0">'
                 f'<strong>{html.escape(item.get("repo") or "未命名项目")}</strong>'
                 f'<p>README：{html.escape(str((verification.get("readme") or {}).get("url") or "未核验"))}</p>'
-                f'<p>许可证：{html.escape(str(license_info.get("status") or "unknown"))}'
+                f'<p>许可证核验：{html.escape(str(license_info.get("status") or "unknown"))}'
                 f' {html.escape(str(license_info.get("name") or ""))}</p>'
                 f'<p>最近提交：{html.escape(str(maintenance.get("last_commit_at") or "未核验"))}；'
                 f'最近发布：{html.escape(str(maintenance.get("latest_release_at") or "未核验"))}；'
@@ -577,14 +577,20 @@ def build_editor_review_panel(payload: dict, copy_state: dict) -> str:
             for entry in payload.get("candidates") or []
             if not entry.get("selected", False)
         ]
+        theme = payload.get("editorial") or {}
+        theme_evidence = "；".join(
+            f'{row.get("repo", "未命名")}：{row.get("hot_reason", "未记录")}'
+            for row in theme.get("theme_evidence") or []
+        ) or "本期采用多路线结构，无强制共同主题"
         return (
             '<aside data-role="editor-review-panel" style="max-width:740px;margin:18px auto;'
             'padding:16px;background:#FFF7D6;color:#5F4B12;border-radius:10px;box-sizing:border-box">'
             '<strong>GitHub 热门审核台（不会复制到公众号正文）</strong>'
             f'<p>候选 {selection.get("candidate_count", 0)} 个；深度核验 '
             f'{selection.get("deep_verified_count", 0)} 个；入选 {selection.get("selected_count", len(project_rows))} 个。</p>'
+            f'<p><strong>本期主题证据：</strong>{html.escape(theme_evidence)}</p>'
             f'{"".join(project_rows)}'
-            f'<p>未入选及原因：{html.escape("；".join(rejected) or "无记录")}</p>'
+            f'<p><strong>未入选项目：</strong>{html.escape("；".join(rejected) or "无记录")}</p>'
             '</aside>'
         )
     if payload.get("content_type") != "daily-news":

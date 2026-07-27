@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from rendering import build_article as build_legacy_article, build_html, render_images
-from github_hot_column import build_article as build_github_hot_article
+from github_hot_column import article_section_hash, build_article as build_github_hot_article
 from github_hot_visuals import select_project_images, select_theme as select_github_theme
 from news_visuals import choose_news_visual, valid_live_pair
 
@@ -25,6 +25,27 @@ def load(path: Path) -> dict:
 def write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text.rstrip() + "\n", encoding="utf-8")
+
+
+def github_copy_history(output_root: Path, current_date: str, limit: int = 8) -> dict:
+    base = output_root / "wechat/github-hot"
+    manifests = sorted(
+        (
+            path for path in base.glob("*/render-manifest.json")
+            if path.parent.name < current_date
+        ),
+        reverse=True,
+    )[:limit] if base.exists() else []
+    rows = []
+    for path in manifests:
+        try:
+            rows.append(load(path))
+        except (OSError, json.JSONDecodeError):
+            continue
+    return {
+        "opening_hashes": [row["opening_hash"] for row in rows if row.get("opening_hash")],
+        "closing_hashes": [row["closing_hash"] for row in rows if row.get("closing_hash")],
+    }
 
 
 def choose_theme(content_type: str, requested: str, config: dict, run_at: datetime) -> str:
@@ -233,7 +254,10 @@ def main() -> None:
             item["_project_image"] = by_rank.get(index, {})
     if args.command in ("build", "all"):
         if payload["content_type"] == "github-hot" and payload.get("schema_version") == 2:
-            article, title, summary = build_github_hot_article(payload)
+            article, title, summary = build_github_hot_article(
+                payload,
+                github_copy_history(args.output_root, run_at.date().isoformat()),
+            )
         else:
             article, title, summary = build_legacy_article(payload)
         cover_title=resolve_cover_title(payload,title)
@@ -250,6 +274,8 @@ def main() -> None:
             ]
         if github_theme:
             manifest["github_theme"] = github_theme
+            manifest["opening_hash"] = article_section_hash(article, "opening")
+            manifest["closing_hash"] = article_section_hash(article, "closing")
         if visual and payload["content_type"] == "daily-news":
             manifest.update({"visual_variant":visual["name"],"color_theme":visual["palette_name"],"asset_version":config["news_visuals"]["version"],"fallback_reason":visual["fallback_reason"]})
         write(out / "render-manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
