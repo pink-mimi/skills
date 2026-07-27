@@ -17,8 +17,8 @@ description: Use when 用户需要采集、核验和筛选前一日新闻，查�
    - 每个来源先寻找窗口内条目，再执行全局候选上限，避免当天稍晚的新内容把昨日新闻挤出候选池。
 3. 运行一次 `build`，对候选执行北京时间过滤、全国/地方/国际判断、转载识别和事件聚类，建立不超过 15 条的 `verification-queue.json` 和 `editorial-workbench.json`。
 4. 按类别打开推荐主管部门原文核验，并在工作副本中逐条补齐工作台字段。政策、统计、灾害等级和处罚结果缺少官方原文时不得写成确定性事实。
-5. 国际新闻必须填写具体中国关联理由；重要地方新闻必须说明公共影响。不能满足时淘汰。
-6. 补齐 `what_happened`、`why_it_matters`、`reader_action`、`editor_note`、`keywords` 和核验状态；可增加面向读者的 `reader_tip`。`editorial.article_title` 用于公众号文章标题，`editorial.title` 可保留为内容包归档名称。RSS 摘要不能直接成为发布级内容。
+5. 国际新闻必须填写具体中国关联理由；重要地方新闻必须说明公共影响。普通娱乐、明星动态、综艺内容、常规体育赛果和赛事宣传默认淘汰；只有具备明确全国性公共利益影响时才允许例外进入，并填写 `domestic_relevance: true`、`public_interest_reason` 和重大影响等级。
+6. 补齐必填的 `what_happened`、`editor_note`、`keywords` 和核验状态；只有存在明确公共影响或可执行事项时才填写 `why_it_matters`、`reader_action` 和 `reader_tip`。`reader_tip` 不得包含“发布前”“待核验”“运营者”等内部审核话术。`editorial.article_title` 用于公众号文章标题，`editorial.title` 可保留为内容包归档名称。RSS 摘要不能直接成为发布级内容。
 7. 将补齐后的 JSON 保存为单独文件，运行 `build --editorial-input <文件>`，再运行 `verify`。
 8. 只有 `content-package.json` 状态为 `ready_for_human_review` 时才能交给 `wechat-content`。仍为 `needs_review` 时不得交给 `wechat-content`，必须继续核验或向用户说明不足。
 

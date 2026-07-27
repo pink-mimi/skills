@@ -91,6 +91,40 @@ class WechatContentTests(unittest.TestCase):
             self.assertNotIn("内部审核：发布前复核原文。",copy)
             self.assertIn("内部审核：发布前复核原文。",before)
 
+    def test_optional_explanation_sections_may_be_absent(self):
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        fixture["items"][0].pop("why_it_matters")
+        fixture["items"][0].pop("reader_action")
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/"optional-explanations.json"
+            source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
+            out=self.build(source,temp)
+            article=(out/"公众号成稿.md").read_text(encoding="utf-8")
+            page=(out/"微信版.html").read_text(encoding="utf-8")
+            button=page.split('<button id="copy-wechat"',1)[1].split("</button>",1)[0]
+            self.assertNotIn("为什么重要",article)
+            self.assertNotIn("普通人需要注意什么",article)
+            self.assertNotIn("disabled",button)
+
+    def test_operator_language_is_not_copied_as_reader_tip(self):
+        fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+        for index,tip in enumerate((
+            "发布前要以最新官方通报为准。",
+            "待核验当地主管部门原文。",
+            "建议运营者复核数字。",
+        )):
+            with self.subTest(tip=tip), tempfile.TemporaryDirectory() as temp:
+                payload=deepcopy(fixture)
+                payload["items"][0]["reader_tip"]=tip
+                source=Path(temp)/f"operator-tip-{index}.json"
+                source.write_text(json.dumps(payload,ensure_ascii=False),encoding="utf-8")
+                out=self.build(source,temp)
+                page=(out/"微信版.html").read_text(encoding="utf-8")
+                copy=page.split('id="wechat-content"',1)[1].split("</article>",1)[0]
+                before=page[:page.index('id="wechat-content"')]
+                self.assertNotIn(tip,copy)
+                self.assertIn(tip,before)
+
     def build(self, fixture, temp, extra=None):
         source=Path(fixture) if Path(fixture).is_absolute() else SKILL/"tests/fixtures"/fixture
         command=[sys.executable,str(SKILL/"scripts/run.py"),"all","--input",str(source),"--output-root",temp]
@@ -493,11 +527,11 @@ class WechatContentTests(unittest.TestCase):
             self.assertIn("border-radius:8px",keyword_card)
             self.assertIn("border-radius:10px",review_panel)
             self.assertIn("不会被复制到公众号正文",review_panel)
-            self.assertEqual(manifest["template_version"],"3.0.0")
+            self.assertEqual(manifest["template_version"],"3.1.0")
 
     def test_incomplete_news_package_is_downgraded_to_needs_review(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
-        fixture["items"][0].pop("why_it_matters")
+        fixture["items"][0].pop("what_happened")
         with tempfile.TemporaryDirectory() as temp:
             source=Path(temp)/"incomplete.json"; source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
             out=self.build(source,temp)
@@ -507,7 +541,7 @@ class WechatContentTests(unittest.TestCase):
 
     def test_incomplete_news_disables_copy_outside_article(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
-        fixture["items"][0].pop("why_it_matters")
+        fixture["items"][0].pop("what_happened")
         with tempfile.TemporaryDirectory() as temp:
             source=Path(temp)/"incomplete-copy.json"
             source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
@@ -520,7 +554,7 @@ class WechatContentTests(unittest.TestCase):
 
     def test_incomplete_news_reports_structure_only_not_validation_success(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
-        fixture["items"][0].pop("why_it_matters")
+        fixture["items"][0].pop("what_happened")
         with tempfile.TemporaryDirectory() as temp:
             source=Path(temp)/"incomplete-status.json"
             source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")

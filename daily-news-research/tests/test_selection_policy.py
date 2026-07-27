@@ -21,12 +21,44 @@ def item(index,category,scope="national",status="verified",organization=None,**e
 
 
 CONFIG={
-    "selection":{"minimum":5,"maximum":8,"minimum_categories":4,"maximum_per_category":2,"maximum_local":1,"maximum_international":1,"required_editorial_fields":["what_happened","why_it_matters","reader_action","editor_note","keywords"]},
+    "selection":{"minimum":5,"maximum":8,"minimum_categories":4,"maximum_per_category":2,"maximum_local":1,"maximum_international":1,"required_editorial_fields":["what_happened","editor_note","keywords"]},
     "health":{"minimum_successful_organizations":5},
 }
 
 
 class SelectionPolicyTests(unittest.TestCase):
+    def test_default_daily_rejects_ordinary_entertainment(self):
+        rows=[
+            item(
+                0,
+                "entertainment",
+                title="《姐姐当家2》嘉宾分享情感故事",
+                organization="中国新闻网",
+            )
+        ]
+        result=pipeline.select_verified_items(rows,CONFIG,{"successful_organizations":7},datetime.fromisoformat("2026-07-22T06:00:00+08:00"))
+        self.assertEqual(result["items"],[])
+        self.assertEqual(result["excluded"][0]["exclusion_reason"],"missing_public_interest")
+
+    def test_default_daily_rejects_ordinary_sports_result(self):
+        rows=[item(0,"sports",title="青少年足球赛完成决赛",organization="人民网")]
+        result=pipeline.select_verified_items(rows,CONFIG,{"successful_organizations":7},datetime.fromisoformat("2026-07-22T06:00:00+08:00"))
+        self.assertEqual(result["items"],[])
+        self.assertEqual(result["excluded"][0]["exclusion_reason"],"missing_public_interest")
+
+    def test_public_interest_entertainment_exception_is_admitted(self):
+        rows=[
+            item(
+                0,
+                "entertainment",
+                domestic_relevance=True,
+                public_interest_reason="主管部门公布适用于网络综艺平台的未成年人保护新规",
+                impact_level="major",
+            )
+        ]
+        result=pipeline.select_verified_items(rows,CONFIG,{"successful_organizations":7},datetime.fromisoformat("2026-07-22T06:00:00+08:00"))
+        self.assertEqual([row["event_id"] for row in result["items"]],["evt-0"])
+
     def test_verified_diverse_items_are_ready(self):
         rows=[item(0,"politics"),item(1,"finance"),item(2,"tech"),item(3,"public-safety"),item(4,"society")]
         result=pipeline.select_verified_items(rows,CONFIG,{"successful_organizations":7},datetime.fromisoformat("2026-07-22T06:00:00+08:00"))
@@ -56,7 +88,7 @@ class SelectionPolicyTests(unittest.TestCase):
         self.assertIn("evt-6",[row["event_id"] for row in result["items"]])
 
     def test_source_health_and_editorial_completeness_gate_ready_status(self):
-        rows=[item(0,"politics"),item(1,"finance"),item(2,"tech"),item(3,"public-safety"),item(4,"society",why_it_matters="")]
+        rows=[item(0,"politics"),item(1,"finance"),item(2,"tech"),item(3,"public-safety"),item(4,"society",what_happened="")]
         result=pipeline.select_verified_items(rows,CONFIG,{"successful_organizations":3},datetime.fromisoformat("2026-07-22T06:00:00+08:00"))
         self.assertEqual(result["status"],"needs_review")
         self.assertTrue(any("机构" in risk for risk in result["risks"]))

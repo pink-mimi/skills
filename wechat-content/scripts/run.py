@@ -14,8 +14,8 @@ from github_hot_visuals import select_project_images, select_theme as select_git
 from news_visuals import choose_news_visual, valid_live_pair
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE_VERSION = "3.0.0"
-NEWS_REQUIRED_FIELDS = ("what_happened", "why_it_matters", "reader_action", "keywords")
+TEMPLATE_VERSION = "3.1.0"
+NEWS_REQUIRED_FIELDS = ("what_happened", "keywords")
 
 
 def load(path: Path) -> dict:
