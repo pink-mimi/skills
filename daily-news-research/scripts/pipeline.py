@@ -181,6 +181,18 @@ def _editorial_complete(row,required):
     return all(row.get(field) and (not isinstance(row.get(field),list) or bool(row[field])) for field in required)
 
 
+SOFT_NEWS_CATEGORIES={"entertainment","sports","娱乐","体育"}
+
+
+def has_public_interest_exception(row):
+    category=str(row.get("category") or "").strip().lower()
+    if category not in SOFT_NEWS_CATEGORIES:
+        return True
+    reason=str(row.get("public_interest_reason") or "").strip()
+    impact=str(row.get("impact_level") or "").strip().lower()
+    return row.get("domestic_relevance") is True and bool(reason) and impact in {"national","major","high"}
+
+
 def select_verified_items(rows,config,collection_meta,run_at):
     selection=config.get("selection",{}); health=config.get("health",{})
     maximum=int(selection.get("maximum",8)); max_per_category=int(selection.get("maximum_per_category",2))
@@ -192,6 +204,8 @@ def select_verified_items(rows,config,collection_meta,run_at):
     saw_unverified=False; stale_dynamic=False; incomplete=False
     for row in ordered:
         category=str(row.get("category") or "general"); scope=str(row.get("geographic_scope") or "national")
+        if not has_public_interest_exception(row):
+            row["exclusion_reason"]="missing_public_interest"; excluded.append(row); continue
         if row.get("verification_status")!="verified": saw_unverified=True
         if not _editorial_complete(row,required): incomplete=True
         if row.get("recheck_before_publish"):

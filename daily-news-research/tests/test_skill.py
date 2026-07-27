@@ -61,6 +61,13 @@ class DailyNewsResearchTests(unittest.TestCase):
         self.assertEqual(package["status"],"needs_review")
         self.assertTrue(any("深度字段" in risk for risk in package["risks"]))
 
+    def test_optional_reader_explanations_do_not_block_ready_status(self):
+        config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            config["selection"]["required_editorial_fields"],
+            ["what_happened","editor_note","keywords"],
+        )
+
     def test_default_sources_cover_four_categories(self):
         config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
         enabled=[x for x in config["sources"] if x.get("enabled",True)]

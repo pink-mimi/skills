@@ -505,7 +505,7 @@ def build_article(payload: dict):
                 if section_text:
                     lines += ["", "<!-- role:section-label -->", f"**{section_label}**", "", section_text]
             reader_tip=item.get("reader_tip")
-            if isinstance(reader_tip,str) and reader_tip.strip():
+            if publishable_reader_tip(reader_tip):
                 lines += ["", "<!-- role:reader-tip -->", f"> **读者提示：** {reader_tip.strip()}"]
         follow_up=filter_news_follow_up(editorial.get("follow_up") or [], [item.get("title","") for item in items])
         if follow_up:
@@ -541,6 +541,17 @@ def inline(text: str, primary: str):
 
 def data_uri(path: Path):
     return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode("ascii")
+
+
+OPERATOR_TIP_MARKERS=("发布前","待核验","补原文","运营者","编辑核对","复核数字")
+
+
+def publishable_reader_tip(value):
+    return (
+        isinstance(value,str)
+        and bool(value.strip())
+        and not any(marker in value for marker in OPERATOR_TIP_MARKERS)
+    )
 
 
 def build_editor_review_panel(payload: dict, copy_state: dict) -> str:
@@ -593,14 +604,17 @@ def build_editor_review_panel(payload: dict, copy_state: dict) -> str:
     for item in payload.get("items") or []:
         status=str(item.get("verification_status") or "unverified")
         note=str(item.get("editor_note") or "").strip()
-        if status=="verified" and not note:
+        reader_tip=str(item.get("reader_tip") or "").strip()
+        rejected_tip=reader_tip if reader_tip and not publishable_reader_tip(reader_tip) else ""
+        if status=="verified" and not note and not rejected_tip:
             continue
         note_html=f'<p style="margin:6px 0 0">{html.escape(note)}</p>' if note else ""
+        tip_html=f'<p style="margin:6px 0 0">未进入正文的审核提示：{html.escape(rejected_tip)}</p>' if rejected_tip else ""
         rows.append(
             f'<section style="margin:10px 0;padding:12px;border-top:1px solid #E2E8F0">'
             f'<strong>{html.escape(item.get("title") or "未命名新闻")}</strong>'
             f'<p style="margin:6px 0 0">状态：{html.escape(status)}</p>'
-            f'{note_html}</section>'
+            f'{note_html}{tip_html}</section>'
         )
     if not rows:
         return ""

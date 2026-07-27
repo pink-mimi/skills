@@ -107,12 +107,18 @@ def domestic_relevant(row):
     text=" ".join(str(row.get(key) or "") for key in ("title","summary","source"))
     markers=("中国","国内","我国","北京","上海","天津","重庆","香港","澳门","台湾","国务院","国家统计局","水利部","应急管理部","教育部","工信部","国家卫健委","新华社","人民网","央视")
     return any(marker in text for marker in markers)
+def has_public_interest_exception(row):
+    category=str(row.get("category") or "").strip().lower()
+    if category not in {"entertainment","sports","娱乐","体育"}: return True
+    reason=str(row.get("public_interest_reason") or "").strip()
+    impact=str(row.get("impact_level") or "").strip().lower()
+    return row.get("domestic_relevance") is True and bool(reason) and impact in {"national","major","high"}
 def editorial_complete(row,required):
     return all(row.get(field) and (not isinstance(row.get(field),list) or len(row[field])>0) for field in required)
 
 def merge_editorial_enrichment(raw, editorial):
     """Merge agent-verified editorial fields without replacing collection evidence."""
-    allowed={"what_happened","why_it_matters","reader_action","reader_tip","editor_note","keywords","summary","verification_status","verified_at","primary_sources","background_sources","verification_notes","recheck_before_publish","china_relevance","china_relevance_reason","impact_level"}
+    allowed={"what_happened","why_it_matters","reader_action","reader_tip","editor_note","keywords","summary","verification_status","verified_at","primary_sources","background_sources","verification_notes","recheck_before_publish","china_relevance","china_relevance_reason","domestic_relevance","public_interest_reason","impact_level"}
     enriched={}
     for item in editorial.get("items",[]):
         keys=(str(item.get("event_id") or "").strip(),str(item.get("url") or "").strip(),str(item.get("title") or "").strip())
@@ -130,7 +136,7 @@ def merge_editorial_enrichment(raw, editorial):
     return merged
 
 def build_editorial_workbench(queue):
-    required=("what_happened","why_it_matters","reader_action","editor_note","keywords")
+    required=("what_happened","editor_note","keywords")
     items=[]
     for value in queue:
         row={key:value.get(key) for key in ("event_id","title","url","category","verification_status","primary_sources","discovery_sources")}
@@ -146,6 +152,9 @@ def build(raw, run_at, config):
         published=parse_time(row.get("published_at")); key=re.sub(r"\W","",str(row.get("title","")).lower())
         if not key or not row["url"] or not published: review.append(row); continue
         if not start <= published < end or key in seen: continue
+        if not has_public_interest_exception(row):
+            row["review_reason"]="娱乐或体育内容缺少明确公共利益影响"
+            review.append(row); continue
         if config.get("selection",{}).get("scope") in {"domestic","china-national"} and not domestic_relevant(row):
             row["review_reason"]="与国内日报定位缺少直接关联"
             review.append(row); continue
