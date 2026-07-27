@@ -15,7 +15,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from editorial import assess_heat
+from editorial import assess_heat, derive_weekly_editorial, project_editorial
 
 
 BJT = timezone(timedelta(hours=8))
@@ -318,6 +318,7 @@ def build(raw, run_at, config, output_root):
                 row["rejection_reasons"].append("超过本期目标数量")
             continue
         row["rank"] = len(selected) + 1
+        row["editorial"] = project_editorial(row, row["heat"])
         selected.append(row)
         ai_count += int(bool(row.get("ai_related")))
         mature_count += int(row["heat"]["heat_class"] == "mature_resurgence")
@@ -327,6 +328,16 @@ def build(raw, run_at, config, output_root):
     candidate_maximum = int(discovery["candidate_maximum"])
     deep_minimum = int(selection_config.get("deep_verified_minimum", 8))
     risks = package_risks(raw, rows, selected, candidate_minimum, deep_minimum)
+    editorial = derive_weekly_editorial(selected)
+    editorial_complete = all(
+        item["editorial"]["hot_reason"]
+        and item["editorial"]["hot_reason_evidence"]
+        and item["editorial"]["use_case"]
+        and len(item["editorial"]["summary"]) >= 40
+        for item in selected
+    )
+    if not editorial_complete:
+        risks.append("入选项目编辑素材不完整")
     ready = (
         not raw.get("meta", {}).get("rate_limited")
         and candidate_minimum <= len(rows) <= candidate_maximum
@@ -334,6 +345,7 @@ def build(raw, run_at, config, output_root):
         and minimum <= len(selected) <= maximum
         and not any(item["verification"]["license"]["status"] == "not_found" for item in selected)
         and all(item["reader_card"]["metrics"].get("verified_at") for item in selected)
+        and editorial_complete
     )
     return {
         "schema_version": 2,
@@ -355,6 +367,7 @@ def build(raw, run_at, config, output_root):
             "target": target_count,
         },
         "items": selected,
+        "editorial": editorial,
         "candidates": rows,
         "sources": [
             {"name": item.get("repo"), "url": item.get("official_url")}
@@ -379,6 +392,7 @@ def validate_package(payload):
         "candidates",
         "sources",
         "risks",
+        "editorial",
     )
     if payload.get("schema_version") != 2:
         errors.append("不支持的 schema_version")
@@ -397,6 +411,8 @@ def validate_package(payload):
             "verification",
             "visual_candidates",
             "image2_brief",
+            "heat",
+            "editorial",
         ):
             if field not in item:
                 errors.append(f"{item.get('repo', '未命名项目')} 缺少 {field}")

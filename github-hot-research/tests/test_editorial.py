@@ -128,5 +128,57 @@ class WeeklyHeatTests(unittest.TestCase):
         self.assertGreater(len(package["items"]) - len(mature), len(mature))
 
 
+class EditorialMaterialTests(unittest.TestCase):
+    def test_editorial_material_only_uses_selected_project_evidence(self):
+        selected = []
+        for index in range(1, 6):
+            item = complete_candidate(index)
+            item["category"] = "developer-tools"
+            heat = EDITORIAL.assess_heat(
+                item,
+                "2026-07-20T09:00:00+08:00",
+                "2026-07-27T09:00:00+08:00",
+            )
+            item["editorial"] = EDITORIAL.project_editorial(item, heat)
+            selected.append(item)
+        material = EDITORIAL.derive_weekly_editorial(selected)
+        self.assertEqual(material["opening_mode"], "theme")
+        self.assertTrue(material["theme_evidence"])
+        allowed = {item["repo"] for item in selected}
+        self.assertTrue({row["repo"] for row in material["theme_evidence"]} <= allowed)
+
+    def test_no_common_theme_uses_multiple_routes_mode(self):
+        selected = []
+        for index in range(1, 6):
+            item = complete_candidate(index)
+            item["category"] = f"unrelated-{index}"
+            heat = EDITORIAL.assess_heat(
+                item,
+                "2026-07-20T09:00:00+08:00",
+                "2026-07-27T09:00:00+08:00",
+            )
+            item["editorial"] = EDITORIAL.project_editorial(item, heat)
+            selected.append(item)
+        material = EDITORIAL.derive_weekly_editorial(selected)
+        self.assertEqual(material["opening_mode"], "multiple_routes")
+        self.assertEqual(material["weekly_theme"], "")
+
+    def test_package_contains_project_and_weekly_editorial_material(self):
+        rows = [complete_candidate(index) for index in range(1, 13)]
+        package = RUN.build(
+            {"meta": {"rate_limited": False}, "items": rows},
+            RUN_AT,
+            deepcopy(CONFIG),
+            tempfile.mkdtemp(),
+        )
+        self.assertIn("editorial", package)
+        for item in package["items"]:
+            self.assertTrue(item["editorial"]["hot_reason"])
+            self.assertTrue(item["editorial"]["hot_reason_evidence"])
+            self.assertTrue(item["editorial"]["use_case"])
+            self.assertGreaterEqual(len(item["editorial"]["summary"]), 40)
+            self.assertEqual(len(item["reader_card"]["highlights"]), 3)
+
+
 if __name__ == "__main__":
     unittest.main()

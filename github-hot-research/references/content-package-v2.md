@@ -2,6 +2,19 @@
 
 顶层固定为 `schema_version: 2`、`content_type: github-hot`，并包含运行窗口、状态、筛选统计、入选项目、完整候选、来源和全局风险。
 
+## 本周热度与编辑材料
+
+每个候选使用 `heat` 保存本周热度分类、连续 7 天窗口内的证据和淘汰原因。长期累计 Star 不能单独证明本周热门；新爆款优先，重新走红的成熟项目最多 2 个。
+
+每个入选项目使用 `editorial` 保存：
+
+- `hot_reason`：为什么这周火；
+- `hot_reason_evidence`：支持热度原因的本周证据；
+- `use_case`：具体使用场景；
+- `summary`：供下游平台写作使用的项目价值说明。
+
+顶层 `editorial` 保存 `opening_mode`、`weekly_theme`、`theme_evidence`、`title_options`、`editorial_angles` 和 `closing_observations`。这些是平台无关的已核验编辑材料，不是固定微信文案。至少 3 个入选项目共享同类证据时才使用主题模式，否则使用 `multiple_routes`，不得硬凑共同趋势。
+
 ## 筛选契约
 
 - 候选 12—20 个，深度核验至少 8 个，入选 5—7 个，默认目标 5 个。
