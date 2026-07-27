@@ -147,10 +147,13 @@ class WechatContentTests(unittest.TestCase):
             "README.md",
             "references/image2-workflow.md",
             "references/daily-news.md",
+            "references/github-hot.md",
         ))
         for phrase in ("七天七色","--image-input-dir","live_image2","weekday_fallback","默认兜底"):
             self.assertIn(phrase,docs)
         for phrase in ("部分核验","发布前复核","关键词信息条"):
+            self.assertIn(phrase,docs)
+        for phrase in ("编辑卡片式","动态开头","动态结尾","品牌稳定、主题半动态","不依赖 `wechat-article-writer`"):
             self.assertIn(phrase,docs)
 
     def test_valid_live_images_are_used_and_recorded(self):

@@ -16,7 +16,7 @@ description: Use when 用户已有标准内容包，需要制作“未完地图�
 3. 新闻读者正文必须包含 `what_happened`、`why_it_matters`、`reader_action` 和 `keywords`；可选的 `reader_tip` 渲染为面向读者的正文提示卡。缺少必填字段时不得假装成稿完整，必须标记 `needs_review` 并禁用复制按钮。读者字段完整时允许复制；存在 `partial` 或 `unverified` 时，必须在复制区外提示发布前核验，并明确不得把成功复制视为发布就绪。`editor_note`、核验状态和审核要求只供运营者查看，不得进入读者正文。
 4. 读取 [references/visual-and-copy.md](references/visual-and-copy.md) 和 [references/image2-workflow.md](references/image2-workflow.md)，生成标题、摘要、Markdown、内联样式 HTML 和内容相关图片。每日新闻标题必须规范为统计窗口起始日加 `国内要闻：主题概括`，上游 `article_title` 不得绕过此前缀。
    - `daily-news` 使用按北京时间星期选择的“七天七色”主题；只有配置缺失或日期异常时才使用中性“默认兜底”。
-   - `github-hot` schema v2 使用轻量读者卡；完整许可证、维护、核验时间、内部风险、淘汰原因和图片授权信息必须位于复制区外。未发现许可证和重要读者风险仍进入正文。
+   - `github-hot` schema v2 使用编辑卡片式读者结构，并依据本期证据生成动态开头与动态结尾；完整许可证、维护、核验时间、内部风险、淘汰原因和图片授权信息必须位于复制区外，不把审核负担转嫁给读者。
    - GitHub 项目图按“已批准官方真实截图 → 当期 Image2 用途示意图 → 本地项目卡片”降级；不得自动使用授权未知或 `review_required` 的素材。
    - 已生成当期 Image 2 无字图时，传入 `--image-input-dir`；否则使用对应星期素材。
 5. 封面固定输出 `1283×383` 合并图：左侧 `900×383` 长封面，右侧 `383×383` 方封面；同时导出两个独立上传文件。

@@ -7,13 +7,13 @@ description: Use when 用户需要发现并核验执行时刻前连续 7 天的 
 
 ## 核心原则
 
-发现 12—20 个候选，至少深度核验 8 个，默认精选 5 个（允许 5—7 个）。AI 项目最多 3 个，同类项目最多 3 个，最近 8 期默认去重；不足 5 个合格项目时标记 `needs_review`。输出固定为平台无关的 `schema_version: 2`，契约见 [references/content-package-v2.md](references/content-package-v2.md)。
+发现 12—20 个候选，至少深度核验 8 个，默认精选 5 个（允许 5—7 个）。候选必须有连续 7 天窗口内的本周热度证据，新爆款优先，重新走红的成熟项目最多 2 个。AI 项目最多 3 个，同类项目最多 3 个，最近 8 期默认去重；不足 5 个合格项目时标记 `needs_review`。输出固定为平台无关的 `schema_version: 2`，契约见 [references/content-package-v2.md](references/content-package-v2.md)。
 
 ## 工作流程
 
 1. 读取配置和 `references/sources-and-risks.md`。
 2. 运行 `collect`，或用 `--input` 载入离线候选。
-3. 深度核验至少 8 个候选的用途、README、许可证、维护、门槛、风险和受众；保留全部候选及未入选原因。
+3. 深度核验至少 8 个候选的用途、README、许可证、维护、门槛、风险和受众；同时核验“为什么这周火”，保留全部候选及未入选原因。
 4. 运行 `build` 生成 `content-package.json`。
 5. 运行 `verify`，再把内容包交给平台制作 Skill。动态指标必须带 `verified_at`；无法确认的 `weekly_stars` 使用 `null`，不得写成 0。
 

@@ -319,7 +319,18 @@ class GithubHotResearchTests(unittest.TestCase):
         self.assertEqual(RUN.score(base), RUN.score(changed))
 
     def test_chinese_docs(self):
-        self.assertIn("## 使用步骤", (SKILL / "README.md").read_text(encoding="utf-8"))
+        docs = "\n".join(
+            (SKILL / path).read_text(encoding="utf-8")
+            for path in (
+                "README.md",
+                "SKILL.md",
+                "references/content-package-v2.md",
+                "references/sources-and-risks.md",
+            )
+        )
+        self.assertIn("## 使用步骤", docs)
+        for phrase in ("连续 7 天", "本周热度证据", "新爆款", "成熟项目最多 2 个", "为什么这周火"):
+            self.assertIn(phrase, docs)
 
 
 if __name__ == "__main__":
