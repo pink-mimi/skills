@@ -1,0 +1,158 @@
+{
+  "schema_version": 2,
+  "content_type": "github-hot",
+  "package_id": "github-hot-2026-07-26",
+  "run_at": "2026-07-26T09:00:00+08:00",
+  "status": "needs_review",
+  "window": {
+    "start": "2026-07-19T09:00:00+08:00",
+    "end": "2026-07-26T09:00:00+08:00",
+    "boundary": "left_closed_right_open"
+  },
+  "selection": {
+    "candidate_count": 12,
+    "deep_verified_count": 9,
+    "selected_count": 1,
+    "minimum": 5,
+    "maximum": 7,
+    "target": 5
+  },
+  "items": [
+    {
+      "rank": 1,
+      "repo": "example/project",
+      "official_url": "https://github.com/example/project",
+      "homepage_url": "https://example.com",
+      "category": "ai-agent",
+      "ai_related": true,
+      "reader_card": {
+        "category_label": "AI Agent 工具",
+        "name": "project",
+        "summary": "帮助用户在本地整理文件和执行自动化任务。",
+        "recommendation": "用途明确，官方文档提供了完整的安装说明。",
+        "highlights": [
+          "本地整理文件",
+          "支持自动化流程",
+          "可以限制执行权限"
+        ],
+        "audience": [
+          "自动化工具用户",
+          "开发者"
+        ],
+        "difficulty": {
+          "level": "medium",
+          "label": "中等",
+          "note": "需要命令行和 API 密钥"
+        },
+        "metrics": {
+          "language": "Python",
+          "stars": 19160,
+          "weekly_stars": null,
+          "forks": 1909,
+          "verified_at": "2026-07-26T08:30:00+08:00"
+        },
+        "reader_warning": ""
+      },
+      "verification": {
+        "readme": {
+          "url": "https://github.com/example/project#readme",
+          "verified_at": "2026-07-26T08:20:00+08:00"
+        },
+        "license": {
+          "status": "not_found",
+          "name": "",
+          "spdx_id": "",
+          "url": ""
+        },
+        "maintenance": {
+          "status": "active",
+          "last_commit_at": "2026-07-25T10:00:00Z",
+          "latest_release_at": "2026-07-24T10:00:00Z",
+          "evidence_urls": [
+            "https://github.com/example/project/commits/main"
+          ]
+        },
+        "requirements": {
+          "platforms": [
+            "Windows",
+            "macOS",
+            "Linux"
+          ],
+          "install": "需要 Python 3",
+          "command_line": true,
+          "programming_required": false,
+          "account_required": false,
+          "api_key_required": true,
+          "paid_dependency": false,
+          "special_hardware": false
+        },
+        "risks": [
+          {
+            "type": "security",
+            "severity": "high",
+            "summary": "项目可以执行本地命令，应限制运行权限。",
+            "reader_visible": true,
+            "source_url": "https://github.com/example/project"
+          },
+          {
+            "type": "stability",
+            "severity": "medium",
+            "summary": "内部审核：最近版本仍处于快速迭代阶段。",
+            "reader_visible": false,
+            "source_url": "https://github.com/example/project/releases"
+          }
+        ],
+        "evidence": [
+          "https://github.com/example/project"
+        ]
+      },
+      "visual_candidates": [
+        {
+          "type": "official_screenshot",
+          "url": "https://raw.githubusercontent.com/example/project/main/docs/demo.png",
+          "source_page": "https://github.com/example/project",
+          "description": "项目 README 中的官方操作界面截图",
+          "is_real_interface": true,
+          "license_status": "verified",
+          "license_name": "MIT",
+          "attribution_required": false,
+          "usage_status": "approved",
+          "verified_at": "2026-07-26T08:30:00+08:00"
+        }
+      ],
+      "image2_brief": {
+        "subject": "本地代理协助整理文件和执行自动化任务",
+        "scene": "桌面工作环境中的文件、终端和自动化流程",
+        "must_include": [
+          "文件整理",
+          "自动化流程"
+        ],
+        "must_avoid": [
+          "项目Logo",
+          "虚构软件界面",
+          "中文文字",
+          "虚构数据"
+        ]
+      }
+    }
+  ],
+  "candidates": [
+    {
+      "repo": "example/rejected",
+      "official_url": "https://github.com/example/rejected",
+      "selected": false,
+      "rejection_reasons": [
+        "维护状态无法确认"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "name": "example/project",
+      "url": "https://github.com/example/project"
+    }
+  ],
+  "risks": [
+    "入选项目存在未发现许可证"
+  ]
+}

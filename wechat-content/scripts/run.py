@@ -4,6 +4,7 @@ import argparse
 import json
 import re
 import struct
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
@@ -11,7 +12,7 @@ from rendering import build_article, build_html, render_images
 from news_visuals import choose_news_visual, valid_live_pair
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE_VERSION = "2.4.0"
+TEMPLATE_VERSION = "3.0.0"
 NEWS_REQUIRED_FIELDS = ("what_happened", "why_it_matters", "reader_action", "keywords")
 
 
@@ -66,7 +67,7 @@ def resolve_cover_title(payload: dict, article_title: str) -> str:
 
 
 def enforce_content_quality(payload: dict) -> dict:
-    payload=dict(payload); payload["items"]=[dict(item) for item in payload.get("items",[])]
+    payload=deepcopy(payload); payload["items"]=[dict(item) for item in payload.get("items",[])]
     if payload.get("content_type")=="daily-news":
         incomplete=[item for item in payload["items"] if any(not item.get(field) for field in NEWS_REQUIRED_FIELDS)]
         if incomplete:
@@ -76,6 +77,32 @@ def enforce_content_quality(payload: dict) -> dict:
 
 
 def copy_eligibility(payload: dict) -> dict:
+    if payload.get("content_type") == "github-hot" and payload.get("schema_version") == 2:
+        incomplete = []
+        for item in payload.get("items", []):
+            card = item.get("reader_card") or {}
+            if (
+                not card.get("summary")
+                or not card.get("recommendation")
+                or len(card.get("highlights") or []) != 3
+                or not card.get("audience")
+                or not (card.get("difficulty") or {}).get("label")
+            ):
+                incomplete.append(item)
+        allowed = bool(payload.get("items")) and not incomplete
+        publish_ready = allowed and payload.get("status") == "ready_for_human_review"
+        return {
+            "allowed": allowed,
+            "reason": "ready" if publish_ready else (
+                f"{len(incomplete)} 个项目缺少读者卡片字段" if incomplete else "review_required"
+            ),
+            "publish_ready": publish_ready,
+            "review_counts": {
+                "verified": int((payload.get("selection") or {}).get("deep_verified_count") or 0),
+                "partial": 0,
+                "unverified": len(incomplete),
+            },
+        }
     if payload.get("content_type") != "daily-news":
         allowed=payload.get("status")=="ready_for_human_review"
         return {
@@ -114,6 +141,113 @@ def copy_eligibility(payload: dict) -> dict:
     }
 
 
+def valid_project_image(path: Path | None, maximum_bytes: int) -> bool:
+    if not path or not path.is_file() or path.stat().st_size > maximum_bytes:
+        return False
+    size = png_size(path)
+    return bool(size and size[0] >= 800 and size[1] >= 450)
+
+
+def load_source_manifest(directory: Path | None) -> dict:
+    if not directory:
+        return {}
+    path = directory / "source-manifest.json"
+    if not path.exists():
+        return {}
+    try:
+        return load(path)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def select_project_images(
+    payload: dict,
+    project_image_dir: Path | None,
+    image_input_dir: Path | None,
+    image_mode: str,
+    maximum_bytes: int,
+) -> list[dict]:
+    official_manifest = load_source_manifest(project_image_dir)
+    official_entries = official_manifest.get("images") or []
+    records = []
+    for position, item in enumerate(payload.get("items") or [], 1):
+        rank = int(item.get("rank") or position)
+        repo = str(item.get("repo") or "")
+        filename = f"projects/{rank:02d}.png"
+        record = {
+            "filename": f"项目-{position:02d}.png",
+            "rank": rank,
+            "repo": repo,
+            "image_mode": "local_project_card",
+            "source_path": "",
+            "source_url": "",
+            "is_real_interface": False,
+            "license_status": "",
+            "verified_at": "",
+            "human_confirmed": False,
+            "fallback_reason": "",
+        }
+        if image_mode in {"auto", "official-only"} and project_image_dir:
+            entry = next(
+                (
+                    value
+                    for value in official_entries
+                    if int(value.get("rank") or 0) == rank and value.get("repo") == repo
+                ),
+                None,
+            )
+            candidate_urls = {
+                value.get("url")
+                for value in item.get("visual_candidates") or []
+                if value.get("usage_status") == "approved"
+                and value.get("license_status") == "verified"
+                and value.get("type") == "official_screenshot"
+            }
+            official_path = project_image_dir / filename
+            if (
+                entry
+                and entry.get("usage_status") == "approved"
+                and entry.get("license_status") == "verified"
+                and entry.get("source_url") in candidate_urls
+                and valid_project_image(official_path, maximum_bytes)
+            ):
+                record.update(
+                    image_mode="official_verified",
+                    source_path=str(official_path),
+                    source_url=str(entry.get("source_url") or ""),
+                    is_real_interface=bool(entry.get("is_real_interface")),
+                    license_status="verified",
+                    verified_at=str(entry.get("verified_at") or ""),
+                    human_confirmed=bool(entry.get("human_confirmed")),
+                )
+        if (
+            record["image_mode"] == "local_project_card"
+            and image_mode in {"auto", "image2"}
+            and image_input_dir
+        ):
+            generated_path = image_input_dir / filename
+            if valid_project_image(generated_path, maximum_bytes):
+                record.update(
+                    image_mode="live_image2",
+                    source_path=str(generated_path),
+                    source_url="",
+                    is_real_interface=False,
+                    license_status="generated",
+                    verified_at="",
+                    fallback_reason="",
+                )
+            else:
+                record["fallback_reason"] = "image2_missing_or_invalid"
+        if record["image_mode"] == "local_project_card" and not record["fallback_reason"]:
+            record["fallback_reason"] = (
+                "official_image_not_approved"
+                if project_image_dir and image_mode in {"auto", "official-only"}
+                else "no_external_project_image"
+            )
+        records.append(record)
+    return records
+
+
 def verify(out: Path, payload: dict) -> None:
     errors = []
     for name in ("公众号成稿.md", "微信版.html", "备选标题.txt", "公众号摘要.txt", "运行报告.md", "render-manifest.json"):
@@ -148,9 +282,22 @@ def main() -> None:
     parser.add_argument("--config", type=Path, default=ROOT / "assets/default-config.json")
     parser.add_argument("--theme", default="auto")
     parser.add_argument("--image-input-dir", type=Path)
+    parser.add_argument("--project-image-dir", type=Path)
+    parser.add_argument(
+        "--image-mode",
+        choices=("auto", "official-only", "image2", "template-only"),
+        default="auto",
+    )
     args = parser.parse_args()
     payload, config = load(args.input), load(args.config)
-    if payload.get("schema_version") != 1 or payload.get("content_type") not in ("daily-news", "github-hot"):
+    supported = (
+        payload.get("schema_version") == 1
+        and payload.get("content_type") in ("daily-news", "github-hot")
+    ) or (
+        payload.get("schema_version") == 2
+        and payload.get("content_type") == "github-hot"
+    )
+    if not supported:
         raise SystemExit("不支持的标准内容包")
     payload=enforce_content_quality(payload)
     copy_state=copy_eligibility(payload)
@@ -166,15 +313,33 @@ def main() -> None:
             if args.image_input_dir:
                 visual["fallback_reason"] = "live_image_invalid"
             visual["image_mode"] = "weekday_fallback"
+    project_images = []
+    if payload["content_type"] == "github-hot" and payload.get("schema_version") == 2:
+        project_images = select_project_images(
+            payload,
+            args.project_image_dir,
+            args.image_input_dir,
+            args.image_mode,
+            int(config["images"]["maximum_bytes"]),
+        )
+        payload["_project_images"] = project_images
+        by_rank = {int(record["rank"]): record for record in project_images}
+        for index, item in enumerate(payload["items"], 1):
+            item["_project_image"] = by_rank.get(index, {})
     if args.command in ("build", "all"):
         article, title, summary = build_article(payload)
         cover_title=resolve_cover_title(payload,title)
-        image_mode = render_images(out / "images", payload, theme, cover_title, visual)
+        image_mode = render_images(out / "images", payload, theme, cover_title, visual, project_images)
         write(out / "公众号成稿.md", article)
         write(out / "微信版.html", build_html(article, out / "images", payload, theme, visual, copy_state))
         write(out / "备选标题.txt", "\n".join(title_options(payload["content_type"], title, len(payload["items"]))))
         write(out / "公众号摘要.txt", summary)
-        manifest = {"schema_version": 1, "content_template": payload["content_type"], "template_version": TEMPLATE_VERSION, "theme": theme, "theme_version": "2.0.0", "image_mode": image_mode, "input_status":payload["status"], "copy_allowed":copy_state["allowed"], "copy_reason":copy_state["reason"], "publish_ready":copy_state["publish_ready"], "review_counts":copy_state["review_counts"], "source_package": payload["package_id"]}
+        manifest = {"schema_version": 1, "input_schema_version":payload["schema_version"], "content_template": payload["content_type"], "template_version": TEMPLATE_VERSION, "theme": theme, "theme_version": "2.0.0", "image_mode": image_mode, "input_status":payload["status"], "copy_allowed":copy_state["allowed"], "copy_reason":copy_state["reason"], "publish_ready":copy_state["publish_ready"], "review_counts":copy_state["review_counts"], "source_package": payload["package_id"]}
+        if project_images:
+            manifest["project_images"] = [
+                {key:value for key,value in record.items() if key != "source_path"}
+                for record in project_images
+            ]
         if visual:
             manifest.update({"visual_variant":visual["name"],"color_theme":visual["palette_name"],"asset_version":config["news_visuals"]["version"],"fallback_reason":visual["fallback_reason"]})
         write(out / "render-manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))

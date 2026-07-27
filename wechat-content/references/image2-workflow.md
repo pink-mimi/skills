@@ -25,3 +25,13 @@
 5. 检查每张图片小于 2 MB，并在公众号手机预览中复核。
 
 星期素材缺失时，渲染器使用中性默认兜底；不能因此跳过正文，也不得把兜底素材声称为本期 Image 2 动态生成结果。
+
+## GitHub 项目图
+
+每个项目对应 `<目录>/projects/NN.png`。选择顺序如下：
+
+1. `--project-image-dir` 中的官方图：必须同时存在 `source-manifest.json`，且项目、来源 URL、真实界面标记、`license_status: verified` 与 `usage_status: approved` 均匹配内容包中的已批准官方截图。
+2. `--image-input-dir` 中的 Image2 图：依据内容包 `image2_brief` 生成，只表达已核验用途，不得出现 Logo、文字、虚构界面或虚构数据。
+3. 本地项目卡片：前两级不可用时自动生成，保证每个项目都有一张正文图。
+
+`--image-mode` 可取 `auto`、`official-only`、`image2`、`template-only`。运行清单记录每张图的实际模式、来源、授权状态和降级原因；这些审核字段不得进入公众号复制区。

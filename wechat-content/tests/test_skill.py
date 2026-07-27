@@ -1,4 +1,5 @@
 import hashlib, json, shutil, subprocess, sys, tempfile, unittest
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from PIL import Image
@@ -218,6 +219,216 @@ class WechatContentTests(unittest.TestCase):
             self.assertIn("开源坐标",page)
             self.assertNotIn("昨日新闻",page)
 
+    def github_v2_fixture(self):
+        return json.loads(
+            (SKILL / "tests/fixtures/github-hot-content-package-v2.json").read_text(encoding="utf-8")
+        )
+
+    def write_fixture(self, directory, payload, name="github-v2.json"):
+        path = Path(directory) / name
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        return path
+
+    def write_png(self, path, color=(42, 143, 161)):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (1200, 675), color).save(path)
+
+    def test_github_schema_v2_uses_lightweight_project_card(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = self.build("github-hot-content-package-v2.json", temp)
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            self.assertIn("#1｜AI Agent 工具", article)
+            self.assertIn("一句话推荐", article)
+            self.assertIn("本地整理文件", article)
+            self.assertIn("适合谁？", article)
+            self.assertIn("上手难度：中等", article)
+
+    def test_github_v2_weekly_stars_null_is_omitted_not_zero(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = self.build("github-hot-content-package-v2.json", temp)
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            self.assertIn("19,160 Star", article)
+            self.assertIn("1,909 Fork", article)
+            self.assertNotIn("本周新增", article)
+            self.assertNotIn("本周新增 0 Star", article)
+
+    def test_github_v2_keeps_full_verification_details_outside_copy_region(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = self.build("github-hot-content-package-v2.json", temp)
+            page = (out / "微信版.html").read_text(encoding="utf-8")
+            copy = page.split('id="wechat-content"', 1)[1].split("</article>", 1)[0]
+            before = page[: page.index('id="wechat-content"')]
+            self.assertNotIn("2026-07-25T10:00:00Z", copy)
+            self.assertNotIn("内部审核：最近版本仍处于快速迭代阶段。", copy)
+            self.assertIn("2026-07-25T10:00:00Z", before)
+            self.assertIn("内部审核：最近版本仍处于快速迭代阶段。", before)
+
+    def test_github_v2_reader_warnings_include_license_and_visible_risk(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = self.build("github-hot-content-package-v2.json", temp)
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            self.assertIn("未发现明确许可证", article)
+            self.assertIn("项目可以执行本地命令，应限制运行权限。", article)
+
+    def test_github_v2_needs_review_is_copyable_but_not_publish_ready(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = self.build("github-hot-content-package-v2.json", temp)
+            page = (out / "微信版.html").read_text(encoding="utf-8")
+            manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
+            button = page.split('<button id="copy-wechat"', 1)[1].split("</button>", 1)[0]
+            self.assertNotIn("disabled", button)
+            self.assertTrue(manifest["copy_allowed"])
+            self.assertFalse(manifest["publish_ready"])
+            self.assertEqual(manifest["input_schema_version"], 2)
+
+    def test_github_v2_does_not_invent_first_person_experience(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = self.build("github-hot-content-package-v2.json", temp)
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            for phrase in ("我亲自试", "我长期使用", "我挺喜欢", "周末刷GitHub时"):
+                self.assertNotIn(phrase, article)
+
+    def test_github_v2_card_uses_exact_package_data(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = self.build("github-hot-content-package-v2.json", temp)
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            for value in ("project", "Python", "19,160", "1,909", "需要命令行和 API 密钥"):
+                self.assertIn(value, article)
+
+    def test_approved_official_image_has_priority_over_image2(self):
+        with tempfile.TemporaryDirectory() as temp:
+            official = Path(temp) / "official"
+            generated = Path(temp) / "image2"
+            self.write_png(official / "projects/01.png", (10, 90, 120))
+            self.write_png(generated / "projects/01.png", (180, 90, 20))
+            (official / "source-manifest.json").write_text(
+                json.dumps(
+                    {
+                        "images": [
+                            {
+                                "file": "projects/01.png",
+                                "rank": 1,
+                                "repo": "example/project",
+                                "source_url": "https://raw.githubusercontent.com/example/project/main/docs/demo.png",
+                                "license_status": "verified",
+                                "usage_status": "approved",
+                                "is_real_interface": True,
+                                "verified_at": "2026-07-26T08:30:00+08:00",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            out = self.build(
+                "github-hot-content-package-v2.json",
+                temp,
+                extra=[
+                    "--project-image-dir",
+                    str(official),
+                    "--image-input-dir",
+                    str(generated),
+                    "--image-mode",
+                    "auto",
+                ],
+            )
+            manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["project_images"][0]["image_mode"], "official_verified")
+            self.assertIn("项目官方截图", (out / "公众号成稿.md").read_text(encoding="utf-8"))
+
+    def test_review_required_official_image_is_not_used_automatically(self):
+        payload = self.github_v2_fixture()
+        payload["items"][0]["visual_candidates"][0]["usage_status"] = "review_required"
+        with tempfile.TemporaryDirectory() as temp:
+            official = Path(temp) / "official"
+            self.write_png(official / "projects/01.png")
+            (official / "source-manifest.json").write_text(
+                json.dumps(
+                    {
+                        "images": [
+                            {
+                                "file": "projects/01.png",
+                                "rank": 1,
+                                "repo": "example/project",
+                                "source_url": "https://example.com/demo.png",
+                                "license_status": "unknown",
+                                "usage_status": "review_required",
+                                "is_real_interface": True,
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            source = self.write_fixture(temp, payload)
+            out = self.build(source, temp, extra=["--project-image-dir", str(official)])
+            manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
+            self.assertNotEqual(manifest["project_images"][0]["image_mode"], "official_verified")
+
+    def test_valid_image2_input_is_recorded_and_labeled(self):
+        with tempfile.TemporaryDirectory() as temp:
+            generated = Path(temp) / "image2"
+            self.write_png(generated / "projects/01.png")
+            out = self.build(
+                "github-hot-content-package-v2.json",
+                temp,
+                extra=["--image-input-dir", str(generated), "--image-mode", "image2"],
+            )
+            manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["project_images"][0]["image_mode"], "live_image2")
+            self.assertIn("项目用途示意图", (out / "公众号成稿.md").read_text(encoding="utf-8"))
+
+    def test_invalid_or_missing_image2_uses_local_project_card(self):
+        with tempfile.TemporaryDirectory() as temp:
+            generated = Path(temp) / "image2/projects"
+            generated.mkdir(parents=True)
+            (generated / "01.png").write_bytes(b"not-png")
+            out = self.build(
+                "github-hot-content-package-v2.json",
+                temp,
+                extra=["--image-input-dir", str(generated.parent), "--image-mode", "image2"],
+            )
+            manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["project_images"][0]["image_mode"], "local_project_card")
+            self.assertTrue((out / "images/项目-01.png").exists())
+
+    def test_unknown_source_image_cannot_be_marked_official(self):
+        with tempfile.TemporaryDirectory() as temp:
+            official = Path(temp) / "official"
+            self.write_png(official / "projects/01.png")
+            out = self.build(
+                "github-hot-content-package-v2.json",
+                temp,
+                extra=["--project-image-dir", str(official), "--image-mode", "official-only"],
+            )
+            manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
+            self.assertNotEqual(manifest["project_images"][0]["image_mode"], "official_verified")
+
+    def test_github_v2_each_project_always_has_one_body_image(self):
+        payload = self.github_v2_fixture()
+        second = deepcopy(payload["items"][0])
+        second["rank"] = 2
+        second["repo"] = "example/project-two"
+        second["reader_card"]["name"] = "project-two"
+        payload["items"].append(second)
+        payload["selection"]["selected_count"] = 2
+        with tempfile.TemporaryDirectory() as temp:
+            source = self.write_fixture(temp, payload)
+            out = self.build(source, temp)
+            self.assertTrue((out / "images/项目-01.png").exists())
+            self.assertTrue((out / "images/项目-02.png").exists())
+            manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(len(manifest["project_images"]), 2)
+
+    def test_github_image_audit_information_stays_outside_copy_region(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = self.build("github-hot-content-package-v2.json", temp)
+            page = (out / "微信版.html").read_text(encoding="utf-8")
+            before, copy = page.split('id="wechat-content"', 1)
+            self.assertIn("图片审核", before)
+            self.assertNotIn("license_status", copy)
+            self.assertNotIn("usage_status", copy)
+
     def test_cover_is_composed_and_versioned(self):
         with tempfile.TemporaryDirectory() as temp:
             out=self.build("daily-news-content-package.json",temp)
@@ -269,7 +480,7 @@ class WechatContentTests(unittest.TestCase):
             self.assertIn("border-radius:8px",keyword_card)
             self.assertIn("border-radius:10px",review_panel)
             self.assertIn("不会被复制到公众号正文",review_panel)
-            self.assertEqual(manifest["template_version"],"2.4.0")
+            self.assertEqual(manifest["template_version"],"3.0.0")
 
     def test_incomplete_news_package_is_downgraded_to_needs_review(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))

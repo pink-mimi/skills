@@ -325,7 +325,14 @@ def news_overview_card(size, items, palette, base_path=None):
     return image
 
 
-def render_images(directory: Path, payload: dict, theme: str, title: str, visual: dict | None = None):
+def render_images(
+    directory: Path,
+    payload: dict,
+    theme: str,
+    title: str,
+    visual: dict | None = None,
+    project_images: list[dict] | None = None,
+):
     directory.mkdir(parents=True, exist_ok=True)
     palette = tuple(visual["palette"]) if visual else PALETTES[theme]
     kicker = "昨日大事 · 每日观察" if payload["content_type"] == "daily-news" else "GitHub 热门 · 每周精选"
@@ -340,8 +347,16 @@ def render_images(directory: Path, payload: dict, theme: str, title: str, visual
         overview_base = Path(visual["overview_path"]) if visual and Path(visual["overview_path"]).exists() else None
         news_overview_card((1200, 675), payload["items"], palette, overview_base).save(directory / "新闻一日脉络.png", optimize=True)
     else:
+        choices = {int(entry["rank"]): entry for entry in (project_images or [])}
         for index, item in enumerate(payload["items"], 1):
-            body_card((1200, 675), item, index, payload["content_type"], palette).save(directory / f"项目-{index:02d}.png", optimize=True)
+            target = directory / f"项目-{index:02d}.png"
+            choice = choices.get(index) or {}
+            source_path = choice.get("source_path")
+            if choice.get("image_mode") in {"official_verified", "live_image2"} and source_path:
+                with Image.open(source_path) as source:
+                    source.convert("RGB").save(target, optimize=True)
+            else:
+                body_card((1200, 675), item, index, payload["content_type"], palette).save(target, optimize=True)
     ending_card((1200, 675), payload["content_type"], palette).save(directory / "结尾图.png", optimize=True)
     return visual.get("image_mode", "weekday_fallback") if use_bundled_base else "template_fallback"
 
@@ -367,8 +382,106 @@ def resolve_article_title(editorial: dict, date_label: str, item_count: int) -> 
     return f"{prefix}{item_count}条变化值得关注"
 
 
+def format_metric(value) -> str:
+    if value is None or value == "":
+        return ""
+    return f"{int(value):,}" if isinstance(value, (int, float)) else str(value)
+
+
+def github_v2_reader_warning(item: dict) -> list[str]:
+    verification = item.get("verification") or {}
+    warnings = []
+    license_info = verification.get("license") or {}
+    if license_info.get("status") != "verified":
+        warnings.append("未发现明确许可证，使用、修改或分发前请先向项目方确认授权边界。")
+    for risk in verification.get("risks") or []:
+        if risk.get("reader_visible") and risk.get("summary"):
+            warnings.append(str(risk["summary"]).strip())
+    explicit = (item.get("reader_card") or {}).get("reader_warning")
+    if explicit:
+        warnings.append(str(explicit).strip())
+    return list(dict.fromkeys(warnings))
+
+
+def build_github_v2_article(payload: dict):
+    items = payload["items"]
+    title = f"本周 GitHub 热门：{len(items)} 个值得关注的开源项目"
+    lines = [
+        f"# {title}",
+        "",
+        "热度让项目进入视野，能解决什么问题、适合谁用，以及使用前有哪些限制，才决定它是否值得收藏。",
+    ]
+    image_labels = {
+        "official_verified": "项目官方截图",
+        "live_image2": "项目用途示意图",
+        "local_project_card": "项目用途卡片",
+    }
+    for index, item in enumerate(items, 1):
+        card = item.get("reader_card") or {}
+        difficulty = card.get("difficulty") or {}
+        metrics = card.get("metrics") or {}
+        image_info = item.get("_project_image") or {}
+        image_label = image_labels.get(image_info.get("image_mode"), "项目用途卡片")
+        heading = card.get("category_label") or item.get("category") or "开源项目"
+        name = card.get("name") or item.get("repo") or f"项目 {index}"
+        lines += [
+            "",
+            "---",
+            "",
+            f"## #{index}｜{heading}",
+            "",
+            f"![{image_label}](images/项目-{index:02d}.png)",
+            "",
+            f"### {name}",
+            "",
+            f"**一句话推荐：** {card.get('recommendation') or card.get('summary') or '用途待确认'}",
+            "",
+            card.get("summary") or "",
+            "",
+            "**它能做什么？**",
+            "",
+        ]
+        lines += [f"- {value}" for value in (card.get("highlights") or [])]
+        audience = "、".join(card.get("audience") or []) or "需要进一步确认"
+        difficulty_text = difficulty.get("label") or difficulty.get("level") or "待确认"
+        difficulty_note = difficulty.get("note")
+        lines += ["", f"**适合谁？** {audience}", "", f"**上手难度：{difficulty_text}**"]
+        if difficulty_note:
+            lines += ["", str(difficulty_note)]
+        metric_parts = []
+        if metrics.get("language"):
+            metric_parts.append(str(metrics["language"]))
+        if metrics.get("stars") is not None:
+            metric_parts.append(f"{format_metric(metrics['stars'])} Star")
+        if metrics.get("weekly_stars") is not None:
+            metric_parts.append(f"本周新增 {format_metric(metrics['weekly_stars'])} Star")
+        if metrics.get("forks") is not None:
+            metric_parts.append(f"{format_metric(metrics['forks'])} Fork")
+        if metric_parts:
+            lines += ["", f"**项目数据：** {'｜'.join(metric_parts)}"]
+        warnings = github_v2_reader_warning(item)
+        if warnings:
+            lines += ["", "**使用前注意：**", "", *[f"- {warning}" for warning in warnings]]
+        official_url = item.get("official_url") or ""
+        lines += ["", f"**项目地址：** [{item.get('repo') or name}]({official_url})"]
+    lines += [
+        "",
+        "---",
+        "",
+        "## 最后留一个坐标",
+        "",
+        "开源项目值得关注的不只是热度，还包括它解决问题的方式、维护状态和使用边界。使用前请继续核对项目官方说明。",
+        "",
+        "![结尾图](images/结尾图.png)",
+    ]
+    summary = f"本周精选 {len(items)} 个开源项目，用轻量卡片说明用途、亮点、适用人群、门槛与必要风险。"
+    return "\n".join(lines), title, summary
+
+
 def build_article(payload: dict):
     items = payload["items"]
+    if payload["content_type"] == "github-hot" and int(payload.get("schema_version", 1)) == 2:
+        return build_github_v2_article(payload)
     if payload["content_type"] == "daily-news":
         editorial=payload.get("editorial") or {}
         start=datetime.fromisoformat(payload["window"]["start"]); end=datetime.fromisoformat(payload["window"]["end"])
@@ -431,6 +544,49 @@ def data_uri(path: Path):
 
 
 def build_editor_review_panel(payload: dict, copy_state: dict) -> str:
+    if payload.get("content_type") == "github-hot" and int(payload.get("schema_version", 1)) == 2:
+        selection = payload.get("selection") or {}
+        project_rows = []
+        for item in payload.get("items") or []:
+            verification = item.get("verification") or {}
+            maintenance = verification.get("maintenance") or {}
+            license_info = verification.get("license") or {}
+            metrics = (item.get("reader_card") or {}).get("metrics") or {}
+            risks = verification.get("risks") or []
+            evidence = verification.get("evidence") or []
+            image_info = item.get("_project_image") or {}
+            project_rows.append(
+                '<section style="margin:10px 0;padding:12px;border-top:1px solid #E2E8F0">'
+                f'<strong>{html.escape(item.get("repo") or "未命名项目")}</strong>'
+                f'<p>README：{html.escape(str((verification.get("readme") or {}).get("url") or "未核验"))}</p>'
+                f'<p>许可证：{html.escape(str(license_info.get("status") or "unknown"))}'
+                f' {html.escape(str(license_info.get("name") or ""))}</p>'
+                f'<p>最近提交：{html.escape(str(maintenance.get("last_commit_at") or "未核验"))}；'
+                f'最近发布：{html.escape(str(maintenance.get("latest_release_at") or "未核验"))}；'
+                f'维护状态：{html.escape(str(maintenance.get("status") or "unknown"))}</p>'
+                f'<p>指标核验时间：{html.escape(str(metrics.get("verified_at") or "未核验"))}</p>'
+                f'<p>风险：{html.escape("；".join(str(r.get("summary") or "") for r in risks) or "无记录")}</p>'
+                f'<p>证据：{html.escape("；".join(map(str, evidence)) or "无记录")}</p>'
+                f'<p>图片审核：image_mode={html.escape(str(image_info.get("image_mode") or "local_project_card"))}；'
+                f'license_status={html.escape(str(image_info.get("license_status") or "unknown"))}；'
+                f'usage_status={html.escape(str(image_info.get("usage_status") or "not_applicable"))}</p>'
+                '</section>'
+            )
+        rejected = [
+            f'{entry.get("repo", "未命名")}：{"；".join(entry.get("rejection_reasons") or ["未记录"])}'
+            for entry in payload.get("candidates") or []
+            if not entry.get("selected", False)
+        ]
+        return (
+            '<aside data-role="editor-review-panel" style="max-width:740px;margin:18px auto;'
+            'padding:16px;background:#FFF7D6;color:#5F4B12;border-radius:10px;box-sizing:border-box">'
+            '<strong>GitHub 热门审核台（不会复制到公众号正文）</strong>'
+            f'<p>候选 {selection.get("candidate_count", 0)} 个；深度核验 '
+            f'{selection.get("deep_verified_count", 0)} 个；入选 {selection.get("selected_count", len(project_rows))} 个。</p>'
+            f'{"".join(project_rows)}'
+            f'<p>未入选及原因：{html.escape("；".join(rejected) or "无记录")}</p>'
+            '</aside>'
+        )
     if payload.get("content_type") != "daily-news":
         return ""
     rows=[]
