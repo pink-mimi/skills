@@ -18,5 +18,12 @@
     },
     "default": {"name": "unfinished-map-default", "palette_name": "default-map", "palette": ["#F3F6F8", "#18384D", "#315F7A", "#D4844A"], "cover": "news-weekday/default/cover.png", "overview": "news-weekday/default/overview.png"}
   },
+  "github_themes": {
+    "ai_automation": {"primary": "#102A43", "accent": "#1FB6C9", "background": "#F5FAFD"},
+    "developer_tools": {"primary": "#102A43", "accent": "#1FA87A", "background": "#F5FBF8"},
+    "creative_tools": {"primary": "#102A43", "accent": "#F28C45", "background": "#FFF9F4"},
+    "systems_data": {"primary": "#243746", "accent": "#D99A2B", "background": "#FFFAF0"},
+    "mixed_default": {"primary": "#102A43", "accent": "#2D9B72", "background": "#F7FBF9"}
+  },
   "images": {"combined_cover": [1283, 383], "wide_cover": [900, 383], "square_cover": [383, 383], "body": [1200, 675], "maximum_bytes": 2097152}
 }

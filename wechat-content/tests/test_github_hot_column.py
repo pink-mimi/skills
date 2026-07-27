@@ -11,6 +11,11 @@ SPEC = importlib.util.spec_from_file_location(
 )
 COLUMN = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(COLUMN)
+VISUAL_SPEC = importlib.util.spec_from_file_location(
+    "github_hot_visuals", SKILL / "scripts/github_hot_visuals.py"
+)
+VISUALS = importlib.util.module_from_spec(VISUAL_SPEC)
+VISUAL_SPEC.loader.exec_module(VISUALS)
 
 
 def payload_five(theme=True):
@@ -63,6 +68,20 @@ def payload_five(theme=True):
 
 
 class GithubHotColumnTests(unittest.TestCase):
+    def test_theme_is_selected_from_content_and_is_repeatable(self):
+        payload = payload_five()
+        families = {
+            "ai_automation": {"primary": "#102A43", "accent": "#1FB6C9", "background": "#F5FAFD"},
+            "developer_tools": {"primary": "#102A43", "accent": "#1FA87A", "background": "#F5FBF8"},
+            "creative_tools": {"primary": "#102A43", "accent": "#F28C45", "background": "#FFF9F4"},
+            "systems_data": {"primary": "#243746", "accent": "#D99A2B", "background": "#FFFAF0"},
+            "mixed_default": {"primary": "#102A43", "accent": "#2D9B72", "background": "#F7FBF9"},
+        }
+        first = VISUALS.select_theme(payload, families)
+        second = VISUALS.select_theme(payload, families)
+        self.assertEqual(first, second)
+        self.assertEqual(first["family"], "ai_automation")
+
     def test_article_has_dynamic_opening_five_projects_and_reflective_closing(self):
         payload = payload_five()
         article, title, _ = COLUMN.build_article(payload)

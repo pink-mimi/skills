@@ -10,6 +10,7 @@ from pathlib import Path
 
 from rendering import build_article as build_legacy_article, build_html, render_images
 from github_hot_column import build_article as build_github_hot_article
+from github_hot_visuals import select_project_images, select_theme as select_github_theme
 from news_visuals import choose_news_visual, valid_live_pair
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -142,113 +143,6 @@ def copy_eligibility(payload: dict) -> dict:
     }
 
 
-def valid_project_image(path: Path | None, maximum_bytes: int) -> bool:
-    if not path or not path.is_file() or path.stat().st_size > maximum_bytes:
-        return False
-    size = png_size(path)
-    return bool(size and size[0] >= 800 and size[1] >= 450)
-
-
-def load_source_manifest(directory: Path | None) -> dict:
-    if not directory:
-        return {}
-    path = directory / "source-manifest.json"
-    if not path.exists():
-        return {}
-    try:
-        return load(path)
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-def select_project_images(
-    payload: dict,
-    project_image_dir: Path | None,
-    image_input_dir: Path | None,
-    image_mode: str,
-    maximum_bytes: int,
-) -> list[dict]:
-    official_manifest = load_source_manifest(project_image_dir)
-    official_entries = official_manifest.get("images") or []
-    records = []
-    for position, item in enumerate(payload.get("items") or [], 1):
-        rank = int(item.get("rank") or position)
-        repo = str(item.get("repo") or "")
-        filename = f"projects/{rank:02d}.png"
-        record = {
-            "filename": f"项目-{position:02d}.png",
-            "rank": rank,
-            "repo": repo,
-            "image_mode": "local_project_card",
-            "source_path": "",
-            "source_url": "",
-            "is_real_interface": False,
-            "license_status": "",
-            "verified_at": "",
-            "human_confirmed": False,
-            "fallback_reason": "",
-        }
-        if image_mode in {"auto", "official-only"} and project_image_dir:
-            entry = next(
-                (
-                    value
-                    for value in official_entries
-                    if int(value.get("rank") or 0) == rank and value.get("repo") == repo
-                ),
-                None,
-            )
-            candidate_urls = {
-                value.get("url")
-                for value in item.get("visual_candidates") or []
-                if value.get("usage_status") == "approved"
-                and value.get("license_status") == "verified"
-                and value.get("type") == "official_screenshot"
-            }
-            official_path = project_image_dir / filename
-            if (
-                entry
-                and entry.get("usage_status") == "approved"
-                and entry.get("license_status") == "verified"
-                and entry.get("source_url") in candidate_urls
-                and valid_project_image(official_path, maximum_bytes)
-            ):
-                record.update(
-                    image_mode="official_verified",
-                    source_path=str(official_path),
-                    source_url=str(entry.get("source_url") or ""),
-                    is_real_interface=bool(entry.get("is_real_interface")),
-                    license_status="verified",
-                    verified_at=str(entry.get("verified_at") or ""),
-                    human_confirmed=bool(entry.get("human_confirmed")),
-                )
-        if (
-            record["image_mode"] == "local_project_card"
-            and image_mode in {"auto", "image2"}
-            and image_input_dir
-        ):
-            generated_path = image_input_dir / filename
-            if valid_project_image(generated_path, maximum_bytes):
-                record.update(
-                    image_mode="live_image2",
-                    source_path=str(generated_path),
-                    source_url="",
-                    is_real_interface=False,
-                    license_status="generated",
-                    verified_at="",
-                    fallback_reason="",
-                )
-            else:
-                record["fallback_reason"] = "image2_missing_or_invalid"
-        if record["image_mode"] == "local_project_card" and not record["fallback_reason"]:
-            record["fallback_reason"] = (
-                "official_image_not_approved"
-                if project_image_dir and image_mode in {"auto", "official-only"}
-                else "no_external_project_image"
-            )
-        records.append(record)
-    return records
-
-
 def verify(out: Path, payload: dict) -> None:
     errors = []
     for name in ("公众号成稿.md", "微信版.html", "备选标题.txt", "公众号摘要.txt", "运行报告.md", "render-manifest.json"):
@@ -315,7 +209,17 @@ def main() -> None:
                 visual["fallback_reason"] = "live_image_invalid"
             visual["image_mode"] = "weekday_fallback"
     project_images = []
+    github_theme = None
     if payload["content_type"] == "github-hot" and payload.get("schema_version") == 2:
+        github_theme = select_github_theme(payload, config["github_themes"])
+        visual = {
+            "palette": [
+                github_theme["background"],
+                github_theme["primary"],
+                github_theme["accent"],
+                "#F28C45",
+            ]
+        }
         project_images = select_project_images(
             payload,
             args.project_image_dir,
@@ -344,10 +248,14 @@ def main() -> None:
                 {key:value for key,value in record.items() if key != "source_path"}
                 for record in project_images
             ]
-        if visual:
+        if github_theme:
+            manifest["github_theme"] = github_theme
+        if visual and payload["content_type"] == "daily-news":
             manifest.update({"visual_variant":visual["name"],"color_theme":visual["palette_name"],"asset_version":config["news_visuals"]["version"],"fallback_reason":visual["fallback_reason"]})
         write(out / "render-manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-        visual_report = "" if not visual else f"\n- visual_variant: `{visual['name']}`\n- color_theme: `{visual['palette_name']}`\n- asset_version: `{config['news_visuals']['version']}`\n- fallback_reason: `{visual['fallback_reason']}`"
+        visual_report = "" if not (visual and payload["content_type"] == "daily-news") else f"\n- visual_variant: `{visual['name']}`\n- color_theme: `{visual['palette_name']}`\n- asset_version: `{config['news_visuals']['version']}`\n- fallback_reason: `{visual['fallback_reason']}`"
+        if github_theme:
+            visual_report += f"\n- github_theme: `{github_theme['family']}`"
         write(out / "运行报告.md", f"# 运行报告\n\n- content_type: `{payload['content_type']}`\n- input_status: `{payload['status']}`\n- content_template: `{payload['content_type']}@{TEMPLATE_VERSION}`\n- theme: `{theme}@2.0.0`\n- image_mode: `{image_mode}`{visual_report}\n- 发布：仅生成审核包，未上传、未发布。")
     if args.command in ("verify", "all"):
         verify(out, payload)

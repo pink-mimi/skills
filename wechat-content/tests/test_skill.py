@@ -390,7 +390,7 @@ class WechatContentTests(unittest.TestCase):
                 extra=["--image-input-dir", str(generated.parent), "--image-mode", "image2"],
             )
             manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["project_images"][0]["image_mode"], "local_project_card")
+            self.assertEqual(manifest["project_images"][0]["image_mode"], "local_project_visual")
             self.assertTrue((out / "images/项目-01.png").exists())
 
     def test_unknown_source_image_cannot_be_marked_official(self):
