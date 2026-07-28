@@ -72,6 +72,36 @@ def payload_five(theme=True):
     return base
 
 
+def payload_ten():
+    payload = payload_five(theme=False)
+    first = deepcopy(payload["items"][0])
+    items = []
+    for index in range(1, 11):
+        item = deepcopy(first)
+        item["rank"] = index
+        item["repo"] = f"example/project-{index:02d}"
+        item["official_url"] = f"https://github.com/example/project-{index:02d}"
+        item["reader_card"]["name"] = f"project-{index:02d}"
+        item["reader_card"]["summary"] = f"project-{index:02d} helps developers understand a weekly trending repository."
+        item["reader_card"]["metrics"]["stars"] = 7000 + index
+        item["reader_card"]["metrics"]["weekly_stars"] = 500 + index
+        item["reader_card"]["metrics"]["forks"] = 900 + index
+        item["_project_image"] = {"image_mode": "official_verified"}
+        items.append(item)
+    payload["items"] = items
+    payload["selection"]["selected_count"] = 10
+    payload["editorial"]["title_options"] = []
+    payload["editorial"]["editorial_angles"] = [
+        "AI 工具继续降低试用门槛",
+        "开发者工具强调本地可控",
+        "数据与监控项目仍有热度",
+    ]
+    payload["editorial"]["closing_observations"] = [
+        "这 10 个项目各自解决不同问题，适合先按需求收藏，再挑一个真正试用。"
+    ]
+    return payload
+
+
 class GithubHotColumnTests(unittest.TestCase):
     def test_theme_is_selected_from_content_and_is_repeatable(self):
         payload = payload_five()
@@ -94,6 +124,16 @@ class GithubHotColumnTests(unittest.TestCase):
         self.assertIn(payload["editorial"]["theme_evidence"][0]["repo"], article)
         self.assertEqual(article.count("<!-- github-project:start -->"), 5)
         self.assertIn("最后留一个坐标", article)
+
+    def test_weekly_github_template_renders_exactly_ten_ranked_projects(self):
+        article, title, summary = COLUMN.build_article(payload_ten())
+        self.assertEqual(title, "本周 GitHub 热门：10 个正在变火的开源项目")
+        self.assertIn("从 GitHub 周榜前 10 个项目看", article)
+        self.assertEqual(article.count("<!-- github-project:start -->"), 10)
+        self.assertIn("## 01 · project-01", article)
+        self.assertIn("## 10 · project-10", article)
+        self.assertIn("**项目地址：** [https://github.com/example/project-10](https://github.com/example/project-10)", article)
+        self.assertIn("10 个项目", summary)
 
     def test_project_uses_approved_editorial_card_order(self):
         article, _, _ = COLUMN.build_article(payload_five())

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
+import html
 import json
 import re
 import shutil
 import sys
+from urllib.parse import urljoin
 import urllib.request
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
@@ -23,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LICENSE_UNKNOWN = {"", "NOASSERTION", "UNKNOWN", "OTHER", "未发现明确许可证"}
 VISUAL_USAGE = {"approved", "review_required", "rejected"}
 REQUIRED_AVOID = ("项目Logo", "虚构软件界面", "中文文字", "虚构数据")
+TRENDING_WEEKLY_URL = "https://github.com/trending?since=weekly"
 
 
 def load(path):
@@ -41,30 +45,14 @@ def window(run_at, config):
 
 def collect(run_at):
     request = urllib.request.Request(
-        "https://github.com/trending?since=weekly",
+        TRENDING_WEEKLY_URL,
         headers={"User-Agent": "github-hot-research/2.0"},
     )
     try:
         page = urllib.request.urlopen(request, timeout=20).read().decode("utf-8", "replace")
     except Exception as exc:
         return {"meta": {"rate_limited": True, "error": str(exc)}, "items": []}
-    repos = []
-    weekly_by_repo = {}
-    for article in re.findall(r"<article[\s\S]*?</article>", page):
-        match = re.search(r'<h2[^>]*>[\s\S]*?href="/([^"?#]+/[^"?#]+)"', article)
-        if not match:
-            continue
-        name = re.sub(r"\s", "", match.group(1))
-        if name not in repos:
-            repos.append(name)
-        weekly_match = re.search(r"([\d,]+)\s+stars\s+this\s+week", article, re.I)
-        if weekly_match:
-            weekly_by_repo[name] = int(weekly_match.group(1).replace(",", ""))
-    if not repos:
-        for repo in re.findall(r'<h2[^>]*>[\s\S]*?href="/([^"?#]+/[^"?#]+)"', page):
-            name = re.sub(r"\s", "", repo)
-            if name not in repos:
-                repos.append(name)
+    trending_rows = parse_trending_weekly_html(page, run_at)
 
     def api_json(path):
         req = urllib.request.Request(
@@ -76,29 +64,47 @@ def collect(run_at):
         )
         return json.loads(urllib.request.urlopen(req, timeout=20).read().decode("utf-8"))
 
-    def enrich(repo):
-        official_url = f"https://github.com/{repo}"
+    def api_readme(repo):
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{repo}/readme",
+            headers={
+                "User-Agent": "github-hot-research/2.0",
+                "Accept": "application/vnd.github+json",
+            },
+        )
+        try:
+            data = json.loads(urllib.request.urlopen(req, timeout=20).read().decode("utf-8"))
+            if data.get("encoding") == "base64" and data.get("content"):
+                return base64.b64decode(data["content"]).decode("utf-8", "replace")
+        except Exception:
+            return ""
+        return ""
+
+    def enrich(row):
+        repo = row["repo"]
+        official_url = row.get("official_url") or f"https://github.com/{repo}"
         try:
             data = api_json(f"/repos/{repo}")
         except Exception:
-            return {
-                "repo": repo,
-                "official_url": official_url,
-                "heat_evidence": [{
-                    "kind": "github_trending",
-                    "observed_at": run_at.isoformat(),
-                    "url": official_url,
-                }],
-            }
+            return row
         license_info = data.get("license") or {}
         license_status = "verified" if license_info.get("spdx_id") and license_info.get("spdx_id") != "NOASSERTION" else "not_found"
-        language = data.get("language") or ""
-        weekly = weekly_by_repo.get(repo)
-        description = data.get("description") or f"{repo} 是本周进入 GitHub Trending 的开源项目。"
+        metrics = row["reader_card"]["metrics"]
+        language = metrics.get("language") or data.get("language") or ""
+        weekly = metrics.get("weekly_stars")
+        description = row.get("description") or data.get("description") or f"{repo} 是本周进入 GitHub Trending 的开源项目。"
         category_label = "AI 项目" if re.search(r"\b(ai|agent|llm|model)\b", description, re.I) else "开源项目"
-        return {
+        readme_text = api_readme(repo)
+        license_record_value = {
+            "status": license_status,
+            "name": license_info.get("name") or "",
+            "spdx_id": license_info.get("spdx_id") or "",
+            "url": f"{official_url}/blob/main/LICENSE",
+        }
+        row.update({
             "repo": repo,
             "official_url": data.get("html_url") or official_url,
+            "homepage_url": data.get("homepage") or "",
             "created_at": data.get("created_at"),
             "category": "ai-automation" if category_label == "AI 项目" else "developer-tools",
             "description": description,
@@ -106,8 +112,8 @@ def collect(run_at):
                 "category_label": category_label,
                 "name": data.get("name") or repo.split("/")[-1],
                 "summary": description,
-                "recommendation": "本周进入 GitHub Trending，适合先收藏并按需试用。",
-                "highlights": ["进入本周 GitHub Trending", "官方仓库资料可追溯", "适合按 README 继续了解"],
+                "recommendation": row["reader_card"].get("recommendation") or "本周进入 GitHub Trending，适合先收藏并按需试用。",
+                "highlights": row["reader_card"].get("highlights") or ["进入本周 GitHub Trending", "官方仓库资料可追溯", "适合按 README 继续了解"],
                 "audience": ["开发者", "开源项目观察者"],
                 "difficulty": {
                     "level": "medium",
@@ -116,9 +122,9 @@ def collect(run_at):
                 },
                 "metrics": {
                     "language": language,
-                    "stars": data.get("stargazers_count"),
+                    "stars": metrics.get("stars") if metrics.get("stars") is not None else data.get("stargazers_count"),
                     "weekly_stars": weekly,
-                    "forks": data.get("forks_count"),
+                    "forks": metrics.get("forks") if metrics.get("forks") is not None else data.get("forks_count"),
                     "verified_at": run_at.isoformat(),
                 },
                 "reader_warning": "",
@@ -126,10 +132,7 @@ def collect(run_at):
             "verification": {
                 "readme": {"url": f"{official_url}#readme", "verified_at": run_at.isoformat()},
                 "license": {
-                    "status": license_status,
-                    "name": license_info.get("name") or "",
-                    "spdx_id": license_info.get("spdx_id") or "",
-                    "url": f"{official_url}/blob/main/LICENSE",
+                    **license_record_value,
                 },
                 "maintenance": {
                     "status": "active" if data.get("pushed_at") else "unknown",
@@ -150,11 +153,17 @@ def collect(run_at):
                 "risks": [],
                 "evidence": [official_url, f"{official_url}#readme"],
             },
-            "visual_candidates": [],
+            "visual_candidates": extract_readme_visual_candidates(
+                readme_text,
+                repo=repo,
+                source_page=f"{official_url}#readme",
+                license_info=license_record_value,
+                verified_at=run_at.isoformat(),
+            ),
             "image2_brief": {
                 "subject": description,
                 "scene": "开源项目工作流与代码协作的抽象场景",
-                "must_include": ["进入本周 GitHub Trending", "官方仓库资料可追溯"],
+                "must_include": row["reader_card"].get("highlights")[:2] or ["进入本周 GitHub Trending", "官方仓库资料可追溯"],
                 "must_avoid": ["项目Logo", "虚构软件界面", "中文文字", "虚构数据"],
             },
             "heat_evidence": [{
@@ -167,11 +176,148 @@ def collect(run_at):
             "use_case": description,
             "editorial_summary": description,
             "ai_related": category_label == "AI 项目",
-        }
+        })
+        return row
     return {
-        "meta": {"rate_limited": False, "fetched_at": run_at.isoformat()},
-        "items": [enrich(repo) for repo in repos[:30]],
+        "meta": {
+            "rate_limited": False,
+            "fetched_at": run_at.isoformat(),
+            "source": "github_trending_weekly",
+            "source_url": TRENDING_WEEKLY_URL,
+        },
+        "items": [enrich(row) for row in trending_rows],
     }
+
+
+def number_from_text(value):
+    text = re.sub(r"[^\d]", "", clean_text(value))
+    return int(text) if text else None
+
+
+def strip_tags(value):
+    return html.unescape(re.sub(r"<[^>]+>", " ", value)).strip()
+
+
+def parse_trending_weekly_html(page, run_at):
+    rows = []
+    for article in re.findall(r"<article[\s\S]*?</article>", page):
+        match = re.search(r'<h2[^>]*>[\s\S]*?href="/([^"?#]+/[^"?#]+)"', article)
+        if not match:
+            continue
+        repo = re.sub(r"\s", "", html.unescape(match.group(1)))
+        if any(row["repo"] == repo for row in rows):
+            continue
+        description_match = re.search(r"<p[^>]*>([\s\S]*?)</p>", article)
+        description = strip_tags(description_match.group(1)) if description_match else f"{repo} 是本周进入 GitHub Trending 的开源项目。"
+        language_match = re.search(r'itemprop="programmingLanguage"[^>]*>([\s\S]*?)</span>', article)
+        language = strip_tags(language_match.group(1)) if language_match else ""
+        star_match = re.search(rf'href="/{re.escape(repo)}/stargazers"[^>]*>([\s\S]*?)</a>', article)
+        fork_match = re.search(rf'href="/{re.escape(repo)}/forks"[^>]*>([\s\S]*?)</a>', article)
+        weekly_match = re.search(r"([\d,]+)\s+stars\s+this\s+week", article, re.I)
+        rank = len(rows) + 1
+        official_url = f"https://github.com/{repo}"
+        rows.append({
+            "repo": repo,
+            "official_url": official_url,
+            "description": description,
+            "category": "developer-tools",
+            "reader_card": {
+                "category_label": "开源项目",
+                "name": repo.split("/")[-1],
+                "summary": description,
+                "recommendation": "本周进入 GitHub Trending，适合先收藏并按需试用。",
+                "highlights": ["进入本周 GitHub Trending", "官方仓库资料可追溯", "适合按 README 继续了解"],
+                "audience": ["开发者", "开源项目观察者"],
+                "difficulty": {"level": "medium", "label": "中等", "note": "以官方 README 为准"},
+                "metrics": {
+                    "language": language,
+                    "stars": number_from_text(star_match.group(1)) if star_match else None,
+                    "weekly_stars": number_from_text(weekly_match.group(1)) if weekly_match else None,
+                    "forks": number_from_text(fork_match.group(1)) if fork_match else None,
+                    "verified_at": run_at.isoformat(),
+                },
+                "reader_warning": "",
+            },
+            "trending": {
+                "rank": rank,
+                "period": "weekly",
+                "url": TRENDING_WEEKLY_URL,
+                "observed_at": run_at.isoformat(),
+            },
+            "heat_evidence": [{
+                "kind": "github_trending",
+                "observed_at": run_at.isoformat(),
+                "url": official_url,
+                "summary": "项目进入 GitHub Trending weekly 榜单。",
+            }],
+            "hot_reason": "项目进入 GitHub Trending weekly 榜单，本周获得明显社区关注。",
+            "use_case": description,
+            "editorial_summary": description,
+            "visual_candidates": [],
+        })
+        if len(rows) >= 10:
+            break
+    return rows
+
+
+def normalize_readme_image_url(url, repo):
+    raw = html.unescape(clean_text(url))
+    if not raw or raw.startswith("#") or raw.startswith("data:"):
+        return ""
+    if raw.startswith(("http://", "https://")):
+        if "github.com" in raw and f"/{repo}/raw/" in raw:
+            return raw.replace("https://github.com/", "https://raw.githubusercontent.com/").replace("/raw/", "/")
+        if "github.com" in raw and f"/{repo}/blob/" in raw:
+            return raw.replace("https://github.com/", "https://raw.githubusercontent.com/").replace("/blob/", "/")
+        return raw
+    return urljoin(f"https://raw.githubusercontent.com/{repo}/main/", raw)
+
+
+def readme_image_type(url, alt):
+    text = f"{url} {alt}".lower()
+    if any(value in text for value in ("badge", "shield", "shields.io", "logo", "avatar", "icon", "social-preview", "social_preview")):
+        return "rejected"
+    if any(value in text for value in ("screenshot", "screen", "demo", "preview", "dashboard", "interface", "ui", "monitor")):
+        return "official_screenshot"
+    return "official_screenshot"
+
+
+def extract_readme_visual_candidates(readme_text, repo, source_page, license_info, verified_at):
+    candidates = []
+    markdown_images = re.findall(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)", readme_text or "")
+    html_images = [
+        (re.search(r'alt=["\']([^"\']*)["\']', tag, re.I).group(1) if re.search(r'alt=["\']([^"\']*)["\']', tag, re.I) else "",
+         re.search(r'src=["\']([^"\']+)["\']', tag, re.I).group(1))
+        for tag in re.findall(r"<img\b[^>]*>", readme_text or "", re.I)
+        if re.search(r'src=["\']([^"\']+)["\']', tag, re.I)
+    ]
+    seen = set()
+    for alt, raw_url in markdown_images + html_images:
+        url = normalize_readme_image_url(raw_url, repo)
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        image_type = readme_image_type(url, alt)
+        if image_type == "rejected":
+            continue
+        repo_hosted = f"raw.githubusercontent.com/{repo}/" in url
+        license_status = clean_text((license_info or {}).get("status"))
+        usage_status = "approved" if repo_hosted and license_status == "verified" else "review_required"
+        candidates.append({
+            "type": image_type,
+            "url": url,
+            "source_page": source_page,
+            "description": clean_text(alt) or "README 中的项目图片",
+            "alt": clean_text(alt),
+            "is_repo_hosted": repo_hosted,
+            "is_real_interface": True,
+            "license_status": license_status or "unknown",
+            "license_name": clean_text((license_info or {}).get("name")),
+            "attribution_required": False,
+            "usage_status": usage_status,
+            "verified_at": verified_at,
+        })
+    return candidates[:3]
 
 
 def clean_text(value):
@@ -412,27 +558,37 @@ def build(raw, run_at, config, output_root):
     ai_count = 0
     mature_count = 0
     categories = {}
-    for row in sorted(rows, key=lambda item: item["score"], reverse=True):
+    locked_trending = raw.get("meta", {}).get("source") == "github_trending_weekly" or all(
+        (row.get("trending") or {}).get("period") == "weekly" for row in rows[:target_count]
+    )
+    selection_rows = (
+        sorted(rows, key=lambda item: int((item.get("trending") or {}).get("rank") or 9999))
+        if locked_trending
+        else sorted(rows, key=lambda item: item["score"], reverse=True)
+    )
+    for row in selection_rows:
         reasons = list(row["rejection_reasons"])
-        if row.get("repo") in past and not row.get("significant_change"):
+        if not locked_trending and row.get("repo") in past and not row.get("significant_change"):
             reasons.append("最近 8 期已经推荐且没有重大更新")
-        if row.get("ai_related") and ai_count >= int(selection_config["maximum_ai"]):
+        if not locked_trending and row.get("ai_related") and ai_count >= int(selection_config["maximum_ai"]):
             reasons.append("AI 项目数量已达到上限")
         if (
+            not locked_trending
+            and
             row["heat"]["heat_class"] == "mature_resurgence"
             and mature_count >= int(config["weekly_heat"]["mature_resurgence_maximum"])
         ):
             reasons.append("成熟项目数量已达到上限")
         category = clean_text(row.get("category"))
-        if categories.get(category, 0) >= int(selection_config["maximum_per_category"]):
+        if not locked_trending and categories.get(category, 0) >= int(selection_config["maximum_per_category"]):
             reasons.append("同一类别数量已达到上限")
         row["rejection_reasons"] = list(dict.fromkeys(reasons))
-        row["selected"] = not row["rejection_reasons"] and len(selected) < target_count
+        row["selected"] = (locked_trending or not row["rejection_reasons"]) and len(selected) < target_count
         if not row["selected"]:
             if not row["rejection_reasons"] and len(selected) >= target_count:
                 row["rejection_reasons"].append("超过本期目标数量")
             continue
-        row["rank"] = len(selected) + 1
+        row["rank"] = int((row.get("trending") or {}).get("rank") or len(selected) + 1)
         row["editorial"] = project_editorial(row, row["heat"])
         selected.append(row)
         ai_count += int(bool(row.get("ai_related")))
@@ -480,6 +636,7 @@ def build(raw, run_at, config, output_root):
             "minimum": minimum,
             "maximum": maximum,
             "target": target_count,
+            "source_locked": locked_trending,
         },
         "items": selected,
         "editorial": editorial,

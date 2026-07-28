@@ -81,7 +81,7 @@ class ModularArchitectureTests(unittest.TestCase):
     def test_research_outputs_are_platform_neutral_content_packages(self):
         cases = (
             ("daily-news-research", ROOT / "daily-news-wechat/tests/fixtures/raw-news.json", "2026-07-19T06:20:00+08:00", "daily-news"),
-            ("github-hot-research", ROOT / "github-hot-wechat/tests/fixtures/candidates.json", "2026-07-25T09:00:00+08:00", "github-hot"),
+            ("github-hot-research", ROOT / "github-hot-research/tests/fixtures/candidates.json", "2026-07-26T09:00:00+08:00", "github-hot"),
         )
         with tempfile.TemporaryDirectory() as temp:
             output_root = Path(temp)
@@ -96,7 +96,8 @@ class ModularArchitectureTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 package = next(output_root.glob(self.research_output_glob(skill_name, content_type)))
                 payload = json.loads(package.read_text(encoding="utf-8"))
-                self.assertEqual(payload["schema_version"], 1)
+                expected_schema = 2 if skill_name == "github-hot-research" else 1
+                self.assertEqual(payload["schema_version"], expected_schema)
                 self.assertEqual(payload["content_type"], content_type)
                 self.assertIn(payload["status"], {"ready_for_human_review", "needs_review"})
                 self.assertTrue(payload["items"])

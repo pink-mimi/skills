@@ -28,11 +28,11 @@
 
 ## GitHub 项目图
 
-GitHub 热门封面可使用 `<目录>/cover.png` 作为 Image2 无字底图。画面应是“开源坐标地图”：10 个发光项目节点、路线、代码窗口或工具图标，不能包含文字、Logo、水印、真实 GitHub 标识或虚构软件界面。脚本会把它裁切成横版和方形封面，并用本地字体叠加中文标题。
+GitHub 热门封面可使用 `<目录>/cover.png` 作为 Image2 无字底图。画面应是“开源坐标地图”：10 个发光项目节点、路线、代码窗口或工具图标，不能包含文字、Logo、水印、真实 GitHub 标识或虚构软件界面。脚本会把它裁切成横版和方形封面，并用本地字体叠加中文标题。没有 Image2 封面时，本地兜底图也必须画出本周 10 个项目节点和路线。
 
 每个项目对应 `<目录>/projects/NN.png`。选择顺序如下：
 
-1. `--project-image-dir` 中的官方图：必须同时存在 `source-manifest.json`，且项目、来源 URL、真实界面标记、`license_status: verified` 与 `usage_status: approved` 均匹配内容包中的已批准官方截图。
+1. `--project-image-dir` 中的官方图：必须同时存在 `source-manifest.json`，且项目、来源 URL、真实界面标记、`license_status: verified` 与 `usage_status: approved` 均匹配内容包中的已批准官方截图。官方图通常来自项目 README/docs/homepage，但只有 repo 内图片且授权状态已核验时才会自动使用。
 2. `--image-input-dir` 中的 Image2 图：依据内容包 `image2_brief` 生成，只表达已核验用途，不得出现 Logo、文字、虚构界面或虚构数据。
 3. 本地项目卡片：前两级不可用时自动生成，保证每个项目都有一张正文图。
 

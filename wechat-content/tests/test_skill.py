@@ -274,7 +274,8 @@ class WechatContentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             out = self.build("github-hot-content-package-v2.json", temp)
             article = (out / "公众号成稿.md").read_text(encoding="utf-8")
-            self.assertIn("01 · AI Agent 工具", article)
+            self.assertIn("01 · project", article)
+            self.assertIn("`AI Agent 工具`", article)
             self.assertIn("描述：", article)
             self.assertIn("一句话概况", article)
             self.assertIn("重点内容", article)

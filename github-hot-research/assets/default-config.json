@@ -5,9 +5,9 @@
     "duration_days": 7
   },
   "discovery": {
-    "candidate_minimum": 16,
-    "candidate_maximum": 30,
-    "minimum_non_ai_candidates": 5
+    "candidate_minimum": 10,
+    "candidate_maximum": 10,
+    "minimum_non_ai_candidates": 0
   },
   "selection": {
     "minimum": 8,

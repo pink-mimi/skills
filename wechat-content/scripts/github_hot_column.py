@@ -23,7 +23,7 @@ def build_title(payload):
     options = (payload.get("editorial") or {}).get("title_options") or []
     if options:
         return str(options[0])
-    return f"这周突然走红的 {len(payload['items'])} 个开源项目"
+    return f"本周 GitHub 热门：{len(payload['items'])} 个正在变火的开源项目"
 
 
 def build_opening_variants(payload):
@@ -55,11 +55,11 @@ def build_opening_variants(payload):
             ],
         ]
     first = [
+        f"从 GitHub 周榜前 {len(items)} 个项目看，本周开源热度走向了几条不同路线。",
         f"这一周值得关注的项目走向了几条不同路线："
         f"{'；'.join((editorial.get('editorial_angles') or [])[:3])}。",
-        f"我们从本周突然走红的项目中挑出 {len(items)} 个，逐一说明它们为什么火、"
-        "能解决什么问题，以及谁最值得收藏。",
-        "项目之间未必共享同一个主题，但都提供了值得继续观察的新坐标。",
+        "下面不展开审核过程，只保留读者最需要的部分：它是什么、数据如何、适合谁，以及是否值得继续打开看。",
+        "热榜负责把项目推到眼前，真正决定要不要收藏的，还是它解决的问题是否刚好对你有用。",
     ]
     return [
         first,
@@ -107,9 +107,9 @@ def build_project(item, index):
         "",
         "---",
         "",
-        f"## {index:02d} · {card.get('category_label') or item.get('category') or '开源项目'}",
+        f"## {index:02d} · {card.get('name') or item['repo']}",
         "",
-        f"### {card.get('name') or item['repo']}",
+        f"`{card.get('category_label') or item.get('category') or '开源项目'}`",
         "",
         f"**描述：** {card.get('summary') or edit.get('summary') or ''}",
         "",
@@ -212,7 +212,7 @@ def build_article(payload, history=None):
     )
     lines.extend(["", "---", "", "<!-- github-closing:start -->", *closing_text.split("\n\n"), "<!-- github-closing:end -->"])
     summary = (
-        f"从过去七天突然走红的项目中精选 {len(payload['items'])} 个，"
+        f"从 GitHub 周榜前十中整理 {len(payload['items'])} 个项目，"
         "说明本周热度、实际用途、核心亮点和上手条件。"
     )
     return "\n".join(lines), title, summary

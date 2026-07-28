@@ -214,7 +214,24 @@ def cover_panel(size, title, kicker, palette, square=False, base_path=None):
     if not (base_path and Path(base_path).exists()):
         draw_grid(draw, (0, 0, width, height), "#DCEAEC", 54)
         draw.rounded_rectangle((24, 24, width - 24, height - 24), 28, fill="#FFFFFF", outline=primary, width=2)
-    if square and not (base_path and Path(base_path).exists()):
+    github_cover = "GitHub" in str(kicker)
+    if github_cover and not (base_path and Path(base_path).exists()):
+        nodes = (
+            [(width - 245, 78), (width - 175, 118), (width - 100, 88), (width - 222, 182), (width - 142, 214),
+             (width - 66, 174), (width - 246, 296), (width - 168, 322), (width - 88, 284), (width - 42, 332)]
+            if not square else
+            [(width - 93, 84), (width - 53, 126), (width - 132, 153), (width - 76, 196), (width - 148, 242),
+             (width - 58, 274), (width - 132, 315), (width - 86, 340)]
+        )
+        for start, end in zip(nodes, nodes[1:]):
+            draw.line((*start, *end), fill=accent, width=4)
+        for position, (x, y) in enumerate(nodes, 1):
+            radius = 15 if position <= 3 else 11
+            draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill="#FFFFFF", outline=primary, width=4)
+            if not square and position <= 10:
+                draw.text((x - 7, y - 9), str(position), font=font(12, True), fill=primary)
+        draw.arc((width - 310, 48, width - 28, height - 34), 205, 345, fill=primary, width=5)
+    elif square and not (base_path and Path(base_path).exists()):
         draw.ellipse((width - 118, height - 122, width - 38, height - 42), fill=primary)
         draw.arc((width - 180, height - 190, width - 20, height - 30), 195, 340, fill=accent, width=8)
     elif not (base_path and Path(base_path).exists()):
@@ -679,7 +696,9 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
             blocks.append(f'<img src="{src}" alt="{html.escape(match.group(1))}" style="display:block;width:100%;height:auto;margin:24px 0;border-radius:10px">'); continue
         if line == "---": blocks.append(f'<div style="height:1px;background:{primary}22;margin:34px 0"></div>'); continue
         if line.startswith("# "): continue
-        if line.startswith("## "): blocks.append(f'<section style="margin:30px 0 16px"><div style="width:36px;height:4px;margin-bottom:10px;border-radius:2px;background:{primary}"></div><h2 style="font-size:22px;line-height:1.5;color:{ink};margin:0;font-weight:800">{inline(line[3:],primary)}</h2></section>'); continue
+        if line.startswith("## "):
+            project_role = ' data-role="github-project-name"' if payload.get("content_type") == "github-hot" and " · " in line else ""
+            blocks.append(f'<section style="margin:30px 0 16px"><div style="width:36px;height:4px;margin-bottom:10px;border-radius:2px;background:{primary}"></div><h2{project_role} style="font-size:22px;line-height:1.5;color:{ink};margin:0;font-weight:800">{inline(line[3:],primary)}</h2></section>'); continue
         if line.startswith("### "): blocks.append(f'<h3 data-role="github-project-name" style="margin:6px 0 12px;color:{ink};font-size:25px;line-height:1.35;font-weight:850;letter-spacing:-.02em">{inline(line[4:],primary)}</h3>'); continue
         if line.startswith("> "):
             content=inline(line[2:],primary)

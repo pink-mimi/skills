@@ -148,6 +148,73 @@ class GithubHotResearchTests(unittest.TestCase):
         self.assertEqual(selection.get("selected_count"), 10)
         self.assertEqual((selection.get("minimum"), selection.get("maximum")), (8, 10))
 
+    def test_trending_weekly_parser_preserves_top_ten_order_and_metrics(self):
+        articles = []
+        for index in range(1, 12):
+            articles.append(
+                f"""
+                <article class="Box-row">
+                  <h2><a href="/owner{index}/repo{index}"> owner{index} / repo{index} </a></h2>
+                  <p>Repository {index} description</p>
+                  <span itemprop="programmingLanguage">Python</span>
+                  <a href="/owner{index}/repo{index}/stargazers">{7000 + index}</a>
+                  <a href="/owner{index}/repo{index}/forks">{900 + index}</a>
+                  <span>{100 + index} stars this week</span>
+                </article>
+                """
+            )
+        rows = RUN.parse_trending_weekly_html("\n".join(articles), RUN_AT)
+        self.assertEqual([row["repo"] for row in rows[:3]], ["owner1/repo1", "owner2/repo2", "owner3/repo3"])
+        self.assertEqual(len(rows), 10)
+        first = rows[0]
+        self.assertEqual(first["trending"]["rank"], 1)
+        self.assertEqual(first["official_url"], "https://github.com/owner1/repo1")
+        self.assertEqual(first["reader_card"]["metrics"]["language"], "Python")
+        self.assertEqual(first["reader_card"]["metrics"]["stars"], 7001)
+        self.assertEqual(first["reader_card"]["metrics"]["forks"], 901)
+        self.assertEqual(first["reader_card"]["metrics"]["weekly_stars"], 101)
+        self.assertEqual(first["trending"]["url"], "https://github.com/trending?since=weekly")
+
+    def test_build_preserves_trending_top_ten_order_without_score_reranking(self):
+        raw = {
+            "meta": {"rate_limited": False, "fetched_at": RUN_AT.isoformat(), "source": "github_trending_weekly"},
+            "items": [candidate(index, weekly_stars=100 + index) for index in range(1, 11)],
+        }
+        raw["items"][0]["reader_card"]["metrics"]["stars"] = 1
+        raw["items"][9]["reader_card"]["metrics"]["stars"] = 999999
+        for index, item in enumerate(raw["items"], 1):
+            item["trending"] = {"rank": index, "period": "weekly", "url": "https://github.com/trending?since=weekly"}
+        package = self.build(raw)
+        self.assertEqual([item["repo"] for item in package["items"]], [f"example/project-{index:02d}" for index in range(1, 11)])
+        self.assertEqual([item["rank"] for item in package["items"]], list(range(1, 11)))
+
+    def test_readme_image_extraction_prefers_repo_screenshots_and_excludes_badges(self):
+        readme = """
+        # Demo
+        ![build](https://img.shields.io/badge/build-passing-green.svg)
+        <img src="https://github.com/owner/repo/raw/main/docs/logo.png" alt="logo" width="80">
+        ![Main dashboard](docs/dashboard.png)
+        <img src="https://raw.githubusercontent.com/owner/repo/main/assets/demo-screen.png" alt="live monitor screenshot">
+        ![External screenshot](https://example.com/screenshot.png)
+        """
+        visuals = RUN.extract_readme_visual_candidates(
+            readme,
+            repo="owner/repo",
+            source_page="https://github.com/owner/repo#readme",
+            license_info={"status": "verified", "name": "MIT", "spdx_id": "MIT"},
+            verified_at=RUN_AT.isoformat(),
+        )
+        urls = [visual["url"] for visual in visuals]
+        self.assertIn("https://raw.githubusercontent.com/owner/repo/main/docs/dashboard.png", urls)
+        self.assertIn("https://raw.githubusercontent.com/owner/repo/main/assets/demo-screen.png", urls)
+        self.assertNotIn("https://img.shields.io/badge/build-passing-green.svg", urls)
+        self.assertFalse(any("logo.png" in url for url in urls))
+        approved = [visual for visual in visuals if "raw.githubusercontent.com/owner/repo" in visual["url"]]
+        self.assertTrue(approved)
+        self.assertTrue(all(visual["usage_status"] == "approved" for visual in approved))
+        external = next(visual for visual in visuals if visual["url"] == "https://example.com/screenshot.png")
+        self.assertEqual(external["usage_status"], "review_required")
+
     def test_fewer_than_eight_selected_is_needs_review(self):
         package = self.build(raw_candidates(7))
         self.assertEqual(package["status"], "needs_review")
@@ -329,7 +396,7 @@ class GithubHotResearchTests(unittest.TestCase):
             )
         )
         self.assertIn("## 使用步骤", docs)
-        for phrase in ("连续 7 天", "本周热度证据", "新爆款", "成熟项目最多 2 个", "为什么这周火"):
+        for phrase in ("GitHub Trending weekly 前 10 名", "保持页面顺序", "完整 GitHub 地址", "README/docs", "为什么这周火"):
             self.assertIn(phrase, docs)
 
 
