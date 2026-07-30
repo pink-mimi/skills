@@ -26,6 +26,7 @@ class ModularArchitectureTests(unittest.TestCase):
         cases = (
             ("daily-news-research", ROOT / "daily-news-wechat/tests/fixtures/raw-news.json", "2026-07-19T06:20:00+08:00", "test-fixtures/daily-news/2026-07-19", "raw-news.json"),
             ("github-hot-research", ROOT / "github-hot-wechat/tests/fixtures/candidates.json", "2026-07-25T09:00:00+08:00", "github-hot/2026-07-25", "raw-candidates.json"),
+            ("ai-discovery-research", ROOT / "ai-discovery-research/tests/fixtures/candidates.json", "2026-07-30T19:30:00+08:00", "ai-discovery/2026-07-30", "raw-candidates.json"),
         )
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -62,7 +63,7 @@ class ModularArchitectureTests(unittest.TestCase):
             self.assertIn("原始快照", result.stdout + result.stderr)
 
     def test_skill_metadata_utf8_and_no_placeholders(self):
-        for name in ("daily-news-research", "github-hot-research", "wechat-content"):
+        for name in ("daily-news-research", "github-hot-research", "ai-discovery-research", "wechat-content"):
             text = (ROOT / name / "SKILL.md").read_text(encoding="utf-8")
             self.assertRegex(text, rf"(?s)^---\nname: {name}\ndescription: Use when .+?\n---")
             self.assertNotIn("TODO", text)
@@ -70,7 +71,7 @@ class ModularArchitectureTests(unittest.TestCase):
             self.assertIn("用户", text)
 
     def test_required_skills_and_chinese_guides_exist(self):
-        for name in ("daily-news-research", "github-hot-research", "wechat-content"):
+        for name in ("daily-news-research", "github-hot-research", "ai-discovery-research", "wechat-content"):
             skill = ROOT / name
             self.assertTrue((skill / "SKILL.md").exists(), name)
             guide = (skill / "README.md").read_text(encoding="utf-8")
@@ -82,6 +83,7 @@ class ModularArchitectureTests(unittest.TestCase):
         cases = (
             ("daily-news-research", ROOT / "daily-news-wechat/tests/fixtures/raw-news.json", "2026-07-19T06:20:00+08:00", "daily-news"),
             ("github-hot-research", ROOT / "github-hot-research/tests/fixtures/candidates.json", "2026-07-26T09:00:00+08:00", "github-hot"),
+            ("ai-discovery-research", ROOT / "ai-discovery-research/tests/fixtures/candidates.json", "2026-07-30T19:30:00+08:00", "ai-discovery"),
         )
         with tempfile.TemporaryDirectory() as temp:
             output_root = Path(temp)
@@ -106,7 +108,7 @@ class ModularArchitectureTests(unittest.TestCase):
     def test_wechat_content_renders_both_columns_and_combined_cover(self):
         renderer = ROOT / "wechat-content"
         with tempfile.TemporaryDirectory() as temp:
-            for fixture in ("daily-news-content-package.json", "github-hot-content-package.json"):
+            for fixture in ("daily-news-content-package.json", "github-hot-content-package.json", "ai-discovery-content-package.json"):
                 result = subprocess.run(
                     [sys.executable, str(renderer / "scripts" / "run.py"), "all",
                      "--input", str(renderer / "tests" / "fixtures" / fixture),
@@ -115,7 +117,7 @@ class ModularArchitectureTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             outputs = list(Path(temp).glob("wechat/*/*"))
-            self.assertEqual(len(outputs), 2)
+            self.assertEqual(len(outputs), 3)
             for output in outputs:
                 page = (output / "微信版.html").read_text(encoding="utf-8")
                 self.assertIn('id="copy-wechat"', page)

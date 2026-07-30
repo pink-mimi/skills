@@ -1,0 +1,3 @@
+display_name: AI 新发现研究
+short_description: 搜索、核验并整理 AI 模型产品应用内容包
+default_prompt: 使用 $ai-discovery-research，生成本期 AI 新发现内容包。

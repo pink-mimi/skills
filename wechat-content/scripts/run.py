@@ -75,6 +75,8 @@ def png_size(path: Path):
 def title_options(content_type: str, title: str, count: int) -> list[str]:
     if content_type == "daily-news":
         return [title, f"未完地图｜{title}", f"昨天，这 {count} 件事值得关注", f"昨日坐标：{count} 个正在发生的变化", f"别只看热搜，昨天更值得留意的是这些事"]
+    if content_type == "ai-discovery":
+        return [title, f"未完地图｜{title}", f"AI 新发现：这 {count} 个新坐标值得看看", f"本期 AI 观察：{count} 个能打开试试的新工具", f"别只看发布会，先看这 {count} 个 AI 用途"]
     return [title, f"未完地图｜{title}", f"本周开源坐标：{count} 个值得收藏的项目", f"GitHub 本周观察：这 {count} 个项目解决了什么", f"从热榜到实用：本周值得打开的 {count} 个项目"]
 
 
@@ -132,6 +134,21 @@ def copy_eligibility(payload: dict) -> dict:
             },
         }
     if payload.get("content_type") != "daily-news":
+        if payload.get("content_type") == "ai-discovery":
+            statuses = [str(item.get("verification_status") or "unverified") for item in payload.get("items", [])]
+            review_counts = {
+                "verified": statuses.count("verified"),
+                "partial": statuses.count("partial"),
+                "unverified": len([status for status in statuses if status not in {"verified", "partial"}]),
+            }
+            allowed = bool(payload.get("items"))
+            publish_ready = allowed and payload.get("status") == "ready_for_human_review" and review_counts["unverified"] == 0
+            return {
+                "allowed": allowed,
+                "reason": "ready" if publish_ready else "review_required",
+                "publish_ready": publish_ready,
+                "review_counts": review_counts,
+            }
         allowed=payload.get("status")=="ready_for_human_review"
         return {
             "allowed":allowed,
@@ -217,7 +234,7 @@ def main() -> None:
     payload, config = load(args.input), load(args.config)
     supported = (
         payload.get("schema_version") == 1
-        and payload.get("content_type") in ("daily-news", "github-hot")
+        and payload.get("content_type") in ("daily-news", "github-hot", "ai-discovery")
     ) or (
         payload.get("schema_version") == 2
         and payload.get("content_type") == "github-hot"

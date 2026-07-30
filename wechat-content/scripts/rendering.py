@@ -22,6 +22,9 @@ PALETTES = {
     "code-archive": ("#F5F1E8", "#263E56", "#476D91", "#D89A35"),
     "field-notes": ("#F8F0DD", "#514936", "#927A4E", "#D3703A"),
     "clean-grid": ("#F5FBFC", "#173F49", "#2A8FA1", "#F1A23D"),
+    "ai-lab": ("#F4FAFB", "#123E4A", "#168B9B", "#F28C45"),
+    "signal-map": ("#F7F4EA", "#253D4C", "#3C7564", "#D99A2B"),
+    "clear-circuit": ("#F4F7FF", "#29335C", "#5368C6", "#2A9D8F"),
 }
 
 NEWS_REMINDER_RULES = (
@@ -200,6 +203,7 @@ def draw_grid(draw, box, color, step=48):
 def cover_panel(size, title, kicker, palette, square=False, base_path=None):
     bg, ink, primary, accent = palette
     github_cover = "GitHub" in str(kicker)
+    ai_cover = "AI 新发现" in str(kicker)
     has_base = bool(base_path and Path(base_path).exists())
     if base_path and Path(base_path).exists():
         centering = (0.34, 0.5) if square else (0.5, 0.5)
@@ -222,6 +226,23 @@ def cover_panel(size, title, kicker, palette, square=False, base_path=None):
                 draw.line((offset, height, offset + height, 0), fill="#0E2538", width=2)
             draw.rounded_rectangle((24, 24, width - 24, height - 24), 28, fill="#091E2F", outline=primary, width=2)
             draw.rounded_rectangle((42, 42, width - 42, height - 42), 22, outline="#1FB6C966", width=1)
+        elif ai_cover:
+            draw_grid(draw, (0, 0, width, height), "#DCEAEC", 54)
+            draw.rounded_rectangle((24, 24, width - 24, height - 24), 28, fill="#FFFFFF", outline=primary, width=2)
+            node_box = (width - 300, 78, width - 56, height - 72) if not square else (width - 185, 95, width - 10, height - 60)
+            for inset in (0, 45, 90):
+                box = (node_box[0] + inset, node_box[1] + inset, node_box[2] - inset, node_box[3] - inset)
+                if box[0] < box[2] and box[1] < box[3]:
+                    draw.arc(box, 205, 340, fill=f"{primary}66", width=3)
+            points = (
+                [(width - 250, 150), (width - 168, 105), (width - 85, 178), (width - 205, 255), (width - 92, 318)]
+                if not square else
+                [(width - 148, 155), (width - 88, 122), (width - 38, 190), (width - 128, 252), (width - 52, 318)]
+            )
+            for start, end in zip(points, points[1:]):
+                draw.line((*start, *end), fill=accent, width=5)
+            for x, y in points:
+                draw.ellipse((x - 16, y - 16, x + 16, y + 16), fill="#FFFFFF", outline=primary, width=5)
         else:
             draw_grid(draw, (0, 0, width, height), "#DCEAEC", 54)
             draw.rounded_rectangle((24, 24, width - 24, height - 24), 28, fill="#FFFFFF", outline=primary, width=2)
@@ -280,7 +301,7 @@ def body_card(size, item, index, content_type, palette):
     draw_grid(draw, (0, 0, width, height), "#DCEAEC", 64)
     draw.rounded_rectangle((42, 42, width - 42, height - 42), 32, fill="#FFFFFF", outline=primary, width=3)
     draw.rounded_rectangle((76, 74, 205, 132), 28, fill=primary)
-    label = "昨日坐标" if content_type == "daily-news" else "开源坐标"
+    label = {"daily-news": "昨日坐标", "ai-discovery": "AI 坐标"}.get(content_type, "开源坐标")
     draw.text((96, 86), f"{index:02d}", font=font(25, True), fill="#FFFFFF")
     draw.text((234, 84), label, font=font(27, True), fill=primary)
     title = item.get("title") or item.get("repo") or "待确认内容"
@@ -293,6 +314,12 @@ def body_card(size, item, index, content_type, palette):
         draw.line((cx - 125, cy + 85, cx - 20, cy + 10, cx + 68, cy + 45, cx + 135, cy - 72), fill=accent, width=14, joint="curve")
         for px, py in ((cx - 125, cy + 85), (cx - 20, cy + 10), (cx + 68, cy + 45), (cx + 135, cy - 72)):
             draw.ellipse((px - 10, py - 10, px + 10, py + 10), fill="#FFFFFF", outline=accent, width=5)
+    elif content_type == "ai-discovery":
+        draw.rounded_rectangle((cx - 105, cy - 82, cx + 105, cy + 82), 30, fill=primary)
+        draw.ellipse((cx - 38, cy - 38, cx + 38, cy + 38), fill="#FFFFFF")
+        for angle, px, py in ((0, cx + 130, cy), (1, cx - 120, cy - 66), (2, cx - 96, cy + 92), (3, cx + 88, cy - 95), (4, cx + 118, cy + 78)):
+            draw.line((cx, cy, px, py), fill=accent, width=6)
+            draw.ellipse((px - 12, py - 12, px + 12, py + 12), fill="#FFFFFF", outline=accent, width=5)
     else:
         draw.rounded_rectangle((cx - 110, cy - 96, cx + 110, cy + 96), 24, fill=primary)
         draw.text((cx - 72, cy - 61), "</>", font=font(58, True), fill="#FFFFFF")
@@ -315,7 +342,7 @@ def ending_card(size, content_type, palette):
     draw.ellipse((90, 120, 390, 420), outline=primary, width=12)
     draw.arc((165, 195, 630, 605), 195, 342, fill=accent, width=15)
     draw.ellipse((565, 500, 599, 534), fill="#FFFFFF", outline=accent, width=7)
-    heading = "明天，地图继续更新" if content_type == "daily-news" else "下周，继续寻找开源坐标"
+    heading = {"daily-news": "明天，地图继续更新", "ai-discovery": "下次，继续观察 AI 坐标"}.get(content_type, "下周，继续寻找开源坐标")
     draw.text((500, 220), heading, font=font(42, True), fill=ink)
     draw.text((500, 298), "你最想继续追踪哪一条？", font=font(28), fill=primary)
     draw.rounded_rectangle((500, 375, 930, 430), 27, fill=primary)
@@ -426,7 +453,7 @@ def render_images(
 ):
     directory.mkdir(parents=True, exist_ok=True)
     palette = tuple(visual["palette"]) if visual else PALETTES[theme]
-    kicker = "昨日大事 · 每日观察" if payload["content_type"] == "daily-news" else "GitHub 热门 · 每周精选"
+    kicker = {"daily-news": "昨日大事 · 每日观察", "ai-discovery": "AI 新发现 · 藏宝图"}.get(payload["content_type"], "GitHub 热门 · 每周精选")
     use_bundled_base = payload["content_type"] == "daily-news" and visual and Path(visual["cover_path"]).exists()
     use_github_cover_base = (
         payload["content_type"] == "github-hot"
@@ -443,7 +470,7 @@ def render_images(
     if payload["content_type"] == "daily-news":
         overview_base = Path(visual["overview_path"]) if visual and Path(visual["overview_path"]).exists() else None
         news_overview_card((1200, 675), payload["items"], palette, overview_base).save(directory / "新闻一日脉络.png", optimize=True)
-    else:
+    elif payload["content_type"] == "github-hot":
         choices = {int(entry["rank"]): entry for entry in (project_images or [])}
         for index, item in enumerate(payload["items"], 1):
             target = directory / f"项目-{index:02d}.png"
@@ -478,18 +505,22 @@ def render_images(
                         source_path="",
                         fallback_reason="official_image_download_failed",
                     )
-            elif target.exists():
-                target.unlink()
-        for index, choice in enumerate(article_images or [], 1):
-            target = directory / str(choice.get("filename") or f"主题插图-{index:02d}.png")
-            source_path = choice.get("source_path")
-            if choice.get("image_mode") == "live_image2" and source_path:
+        for index, record in enumerate(article_images or [], 1):
+            source_path = record.get("source_path")
+            if source_path:
                 with Image.open(source_path) as source:
-                    normalize_project_image(source).save(target, optimize=True)
+                    normalize_project_image(source).save(directory / f"主题插图-{index:02d}.png", optimize=True)
             else:
-                github_topic_card((1200, 675), payload, index, palette).save(target, optimize=True)
+                github_topic_card((1200, 675), payload, index, palette).save(directory / f"主题插图-{index:02d}.png", optimize=True)
+    else:
+        for index, item in enumerate(payload["items"], 1):
+            body_card((1200, 675), item, index, payload["content_type"], palette).save(directory / f"AI发现-{index:02d}.png", optimize=True)
     ending_card((1200, 675), payload["content_type"], palette).save(directory / "结尾图.png", optimize=True)
-    return visual.get("image_mode", "weekday_fallback") if use_bundled_base else "template_fallback"
+    if payload["content_type"] == "daily-news":
+        return visual.get("image_mode", "weekday_fallback") if visual else "template"
+    if payload["content_type"] == "ai-discovery":
+        return "ai_discovery_template"
+    return "template_fallback"
 
 
 def is_internal_package_title(value: str) -> bool:
@@ -613,6 +644,62 @@ def build_article(payload: dict):
     items = payload["items"]
     if payload["content_type"] == "github-hot" and int(payload.get("schema_version", 1)) == 2:
         return build_github_v2_article(payload)
+    if payload["content_type"] == "ai-discovery":
+        editorial = payload.get("editorial") or {}
+        title = editorial.get("title") or f"AI 新发现：{len(items)} 个值得留意的新坐标"
+        overview = normalize_overview(editorial.get("overview"), [item.get("recommendation") or item.get("use_case", "") for item in items])
+        lines = [
+            f"# {title}",
+            "",
+            "这期不做玄学预测，只把近期值得打开看看的 AI 新东西放到一张小地图上：它能做什么，适合谁，开始前有哪些门槛和风险。",
+            "",
+            "> AI 坐标｜先看用途，再决定要不要试。",
+            "",
+            "## 30 秒速览",
+            "",
+        ]
+        lines += [f"- {text}" for text in overview[:5]]
+        for index, item in enumerate(items, 1):
+            risks = "；".join(item.get("risks") or ["发布前继续核验官方说明"])
+            sources = item.get("official_sources") or []
+            source = sources[0] if sources else {"name": "官方来源", "url": item.get("official_url", "")}
+            tested_line = "未做亲身体验，以下为公开资料核验和可试用路径整理。" if not item.get("tested") else "已记录实际试用信息，但发布前仍需人工复核。"
+            lines += [
+                "",
+                "---",
+                "",
+                f"## {index:02d}｜{item.get('name', 'AI 新发现')}",
+                "",
+                f"![{item.get('name', 'AI 新发现')}](images/AI发现-{index:02d}.png)",
+                "",
+                f"**类型**　{item.get('type', 'AI 应用')}",
+                "",
+                f"**能做什么**　{item.get('use_case', '用途待确认')}",
+                "",
+                f"**适合谁**　{'、'.join(item.get('audience') or ['AI 工具观察者'])}",
+                "",
+                f"**怎么开始**　{item.get('requirements', '以官方说明为准')}；费用/限制：{item.get('pricing', '待核验')}",
+                "",
+                f"**值得留意**　{item.get('recommendation', '用途明确，但仍需人工复核推荐价值。')}",
+                "",
+                f"**限制提醒**　{risks}",
+                "",
+                f"**资料边界**　{tested_line}",
+                "",
+                f"**官方地址**　[{source.get('name', '官方来源')}]({source.get('url') or item.get('official_url', '')})",
+            ]
+        lines += [
+            "",
+            "---",
+            "",
+            "## 最后留一个坐标",
+            "",
+            "AI 新东西很多，真正值得留下来的，通常不是“又会了一个炫技动作”，而是能不能在具体场景里少绕一点路。发布前请继续打开官方链接，确认费用、隐私和可用性。",
+            "",
+            "![结尾图](images/结尾图.png)",
+        ]
+        summary = editorial.get("summary") or f"整理 {len(items)} 个近期 AI 模型、产品或应用，说明用途、适合人群、费用门槛和风险。"
+        return "\n".join(lines), title, summary
     if payload["content_type"] == "daily-news":
         editorial=payload.get("editorial") or {}
         start=datetime.fromisoformat(payload["window"]["start"]); end=datetime.fromisoformat(payload["window"]["end"])
@@ -686,6 +773,30 @@ def publishable_reader_tip(value):
 
 
 def build_editor_review_panel(payload: dict, copy_state: dict) -> str:
+    if payload.get("content_type") == "ai-discovery":
+        rows = []
+        for item in payload.get("items") or []:
+            sources = item.get("official_sources") or []
+            rows.append(
+                '<section style="margin:10px 0;padding:12px;border-top:1px solid #E2E8F0">'
+                f'<strong>{html.escape(item.get("name") or "未命名 AI 条目")}</strong>'
+                f'<p>核验状态：{html.escape(str(item.get("verification_status") or "unverified"))}；'
+                f'实际体验：{html.escape("是" if item.get("tested") else "否")}</p>'
+                f'<p>费用/限制：{html.escape(str(item.get("pricing") or "待核验"))}</p>'
+                f'<p>使用门槛：{html.escape(str(item.get("requirements") or "待核验"))}</p>'
+                f'<p>风险：{html.escape("；".join(map(str, item.get("risks") or [])) or "无记录")}</p>'
+                f'<p>官方来源：{html.escape("；".join(str(source.get("url") or "") for source in sources) or str(item.get("official_url") or ""))}</p>'
+                '</section>'
+            )
+        counts = copy_state["review_counts"]
+        return (
+            '<aside data-role="editor-review-panel" style="max-width:740px;margin:18px auto;'
+            'padding:16px;background:#FFF7D6;color:#5F4B12;border-radius:10px;box-sizing:border-box">'
+            '<strong>AI 新发现审核台（不会复制到公众号正文）</strong>'
+            f'<p>已核验 {counts["verified"]} 条，部分核验 {counts["partial"]} 条，未核验 {counts["unverified"]} 条。</p>'
+            '<p>发布前请人工打开官方链接，确认费用、隐私、安全、版权和可用地区。</p>'
+            f'{"".join(rows)}</aside>'
+        )
     if payload.get("content_type") == "github-hot" and int(payload.get("schema_version", 1)) == 2:
         selection = payload.get("selection") or {}
         project_rows = []
@@ -767,7 +878,7 @@ def build_editor_review_panel(payload: dict, copy_state: dict) -> str:
 
 def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual: dict | None = None, copy_state: dict | None = None):
     bg, ink, primary, accent = tuple(visual["palette"]) if visual else PALETTES[theme]
-    label = "昨日坐标" if payload["content_type"] == "daily-news" else "开源坐标"
+    label = {"daily-news": "昨日坐标", "ai-discovery": "AI 坐标"}.get(payload["content_type"], "开源坐标")
     title=next((line[2:].strip() for line in markdown.splitlines() if line.startswith("# ")),"微信公众号审核包")
     blocks = []
     pending_role = None

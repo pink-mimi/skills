@@ -14,6 +14,7 @@
 daily-news-research ───┐
                        ├─→ 标准内容包 v1 → wechat-content → 一键复制 → 人工发布
 github-hot-research ───┘
+ai-discovery-research ─┘
 ```
 
 定时器只负责按日期唤醒研究 Skill；Skill 负责计算时间窗口、生成内容和审核材料。下载安装后不会自动每天或每周运行。
@@ -24,6 +25,7 @@ github-hot-research ───┘
 |---|---|---|
 | [`daily-news-research`](daily-news-research/README.md) | 四级来源阶梯采集前一日新闻，以官方原文核验全国重要新闻并生成可审计内容包 | 推荐的新研究层 |
 | [`github-hot-research`](github-hot-research/README.md) | 查询执行时刻前连续 7 天的 GitHub 热门项目并核验 | 推荐的新研究层 |
+| [`ai-discovery-research`](ai-discovery-research/README.md) | 搜索并核验 AI 模型、产品、应用和案例，生成“AI 新发现”标准内容包 | 推荐的新研究层 |
 | [`wechat-content`](wechat-content/README.md) | 把标准内容包制作成可复制的公众号正文、配图和封面 | 推荐的平台制作层 |
 | [`daily-news-wechat`](daily-news-wechat/README.md) | 新闻采集与公众号制作的一体化旧入口 | 继续兼容 |
 | [`github-hot-wechat`](github-hot-wechat/README.md) | GitHub 热门与公众号制作的一体化旧入口 | 继续兼容 |
@@ -50,6 +52,13 @@ npx skills add pink-mimi/skills --skill github-hot-research
 npx skills add pink-mimi/skills --skill wechat-content
 ```
 
+安装 AI 新发现研究和公众号制作：
+
+```bash
+npx skills add pink-mimi/skills --skill ai-discovery-research
+npx skills add pink-mimi/skills --skill wechat-content
+```
+
 ## 使用步骤
 
 ### 每日新闻
@@ -66,6 +75,13 @@ npx skills add pink-mimi/skills --skill wechat-content
 2. 复核仓库主页、README、LICENSE、Release、Commit 和风险。
 3. 使用 `$wechat-content` 生成公众号审核包。
 4. 复制正文、上传封面并人工发布。
+
+### AI 新发现
+
+1. 对 Codex 说：`使用 $ai-discovery-research，生成本期 AI 新发现内容包。`
+2. 复核官方来源、发布时间、费用限制、隐私安全和版权边界。
+3. 使用 `$wechat-content` 生成公众号审核包。
+4. 复制正文、上传封面并人工预览发布。
 
 ## 封面与图片
 
@@ -86,6 +102,7 @@ images/
 
 - 每日新闻默认窗口：北京时间 `[前一日 06:00，当日 06:00)`。
 - GitHub 热门默认窗口：执行时刻向前连续 7 天。
+- AI 新发现默认窗口：执行时刻向前连续 14 天。
 - `--run-at` 可用于历史补跑和可重复验证。
 - 重复运行默认使用 `stable` 模式复用同一期原始快照；只有明确使用 `--mode refresh` 才重新联网并保存修订记录。
 - 自动化配置位于 Skill 外部，不会随安装自动启用。

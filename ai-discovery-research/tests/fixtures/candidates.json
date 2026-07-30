@@ -1,0 +1,89 @@
+{
+  "meta": {
+    "rate_limited": false,
+    "fetched_at": "2026-07-30T19:30:00+08:00",
+    "source": "fixture"
+  },
+  "items": [
+    {
+      "name": "Atlas Agent Studio",
+      "type": "application",
+      "official_url": "https://example.com/atlas-agent-studio",
+      "discovered_at": "2026-07-28T10:00:00+08:00",
+      "official_sources": [{"name": "官方发布页", "url": "https://example.com/atlas-agent-studio", "verified_at": "2026-07-30T18:00:00+08:00"}],
+      "use_case": "把多步骤资料整理任务拆成可复用的 AI Agent 工作流。",
+      "audience": ["内容运营者", "自动化工作流用户"],
+      "pricing": "免费额度加团队付费版",
+      "requirements": "需要注册账号，复杂流程需要连接第三方工具。",
+      "risks": ["上传资料前需检查隐私和授权"],
+      "verification_status": "verified",
+      "recommendation": "适合观察 AI Agent 从聊天助手走向工作流工具的变化。",
+      "tested": false,
+      "evidence": ["官方文档列出工作流和价格信息"]
+    },
+    {
+      "name": "River Image Model",
+      "type": "model",
+      "official_url": "https://example.com/river-image-model",
+      "discovered_at": "2026-07-27T12:00:00+08:00",
+      "official_sources": [{"name": "模型卡", "url": "https://example.com/river-image-model", "verified_at": "2026-07-30T18:10:00+08:00"}],
+      "use_case": "生成产品草图和社交媒体配图，强调中文提示词理解。",
+      "audience": ["设计师", "内容创作者"],
+      "pricing": "按量计费，开源权重待确认",
+      "requirements": "云端 API 或 Hugging Face 在线体验。",
+      "risks": ["商用授权和训练数据边界需要发布前复核"],
+      "verification_status": "verified",
+      "recommendation": "适合关注中文图像生成能力和商用边界的人继续试用。",
+      "tested": false,
+      "evidence": ["官方模型卡列出能力、限制和示例"]
+    },
+    {
+      "name": "Notebook Copilot",
+      "type": "product",
+      "official_url": "https://example.com/notebook-copilot",
+      "discovered_at": "2026-07-26T09:00:00+08:00",
+      "official_sources": [{"name": "产品文档", "url": "https://example.com/notebook-copilot/docs", "verified_at": "2026-07-30T18:20:00+08:00"}],
+      "use_case": "在个人知识库里总结长文、生成问答并保留来源引用。",
+      "audience": ["研究人员", "学生", "写作者"],
+      "pricing": "基础版免费，高级模型需要订阅",
+      "requirements": "需要导入文档并授权索引。",
+      "risks": ["敏感资料不应直接上传到第三方云端"],
+      "verification_status": "verified",
+      "recommendation": "适合把 AI 当作资料整理助手，而不是简单聊天窗口的人。",
+      "tested": false,
+      "evidence": ["官方文档说明引用和权限设置"]
+    },
+    {
+      "name": "Tiny Speech Bench",
+      "type": "case",
+      "official_url": "https://example.com/tiny-speech-bench",
+      "discovered_at": "2026-07-25T20:00:00+08:00",
+      "official_sources": [{"name": "论文页面", "url": "https://example.com/tiny-speech-bench", "verified_at": "2026-07-30T18:30:00+08:00"}],
+      "use_case": "比较小型语音模型在低资源设备上的识别表现。",
+      "audience": ["语音应用开发者", "边缘计算观察者"],
+      "pricing": "论文和评测集公开，模型许可需逐项核对",
+      "requirements": "需要 Python 环境和基础机器学习知识。",
+      "risks": ["评测结果不能直接代表真实生产场景"],
+      "verification_status": "partial",
+      "recommendation": "适合看 AI 能否从大模型叙事回到更具体的设备场景。",
+      "tested": false,
+      "evidence": ["论文页面列出评测设置"]
+    },
+    {
+      "name": "Prompt Safety Cards",
+      "type": "documentation",
+      "official_url": "https://example.com/prompt-safety-cards",
+      "discovered_at": "2026-07-24T16:00:00+08:00",
+      "official_sources": [{"name": "官方文档", "url": "https://example.com/prompt-safety-cards", "verified_at": "2026-07-30T18:40:00+08:00"}],
+      "use_case": "把常见提示词风险整理成团队内部检查卡。",
+      "audience": ["AI 产品经理", "研发团队", "内容团队"],
+      "pricing": "公开文档免费",
+      "requirements": "需要结合团队业务改写检查项。",
+      "risks": ["不能替代正式安全评估"],
+      "verification_status": "verified",
+      "recommendation": "适合想把 AI 使用规范落到日常流程里的团队收藏。",
+      "tested": false,
+      "evidence": ["官方文档列出检查项和示例"]
+    }
+  ]
+}

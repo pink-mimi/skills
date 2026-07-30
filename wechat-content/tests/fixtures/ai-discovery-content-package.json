@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "content_type": "ai-discovery",
+  "package_id": "ai-discovery-2026-07-30",
+  "run_at": "2026-07-30T19:30:00+08:00",
+  "status": "needs_review",
+  "window": {
+    "start": "2026-07-16T19:30:00+08:00",
+    "end": "2026-07-30T19:30:00+08:00",
+    "boundary": "left_closed_right_open"
+  },
+  "selection": {
+    "candidate_count": 5,
+    "selected_count": 5,
+    "verified_count": 4,
+    "minimum": 3,
+    "maximum": 5,
+    "target": 5
+  },
+  "items": [
+    {
+      "rank": 1,
+      "name": "Atlas Agent Studio",
+      "type": "application",
+      "official_url": "https://example.com/atlas-agent-studio",
+      "discovered_at": "2026-07-28T10:00:00+08:00",
+      "official_sources": [{"name": "官方发布页", "url": "https://example.com/atlas-agent-studio", "verified_at": "2026-07-30T18:00:00+08:00"}],
+      "use_case": "把多步骤资料整理任务拆成可复用的 AI Agent 工作流。",
+      "audience": ["内容运营者", "自动化工作流用户"],
+      "pricing": "免费额度加团队付费版",
+      "requirements": "需要注册账号，复杂流程需要连接第三方工具。",
+      "risks": ["上传资料前需检查隐私和授权"],
+      "verification_status": "verified",
+      "recommendation": "适合观察 AI Agent 从聊天助手走向工作流工具的变化。",
+      "tested": false
+    },
+    {
+      "rank": 2,
+      "name": "River Image Model",
+      "type": "model",
+      "official_url": "https://example.com/river-image-model",
+      "discovered_at": "2026-07-27T12:00:00+08:00",
+      "official_sources": [{"name": "模型卡", "url": "https://example.com/river-image-model", "verified_at": "2026-07-30T18:10:00+08:00"}],
+      "use_case": "生成产品草图和社交媒体配图，强调中文提示词理解。",
+      "audience": ["设计师", "内容创作者"],
+      "pricing": "按量计费，开源权重待确认",
+      "requirements": "云端 API 或 Hugging Face 在线体验。",
+      "risks": ["商用授权和训练数据边界需要发布前复核"],
+      "verification_status": "partial",
+      "recommendation": "适合关注中文图像生成能力和商用边界的人继续试用。",
+      "tested": false
+    }
+  ],
+  "candidates": [],
+  "sources": [{"name": "Atlas Agent Studio", "url": "https://example.com/atlas-agent-studio"}],
+  "risks": ["禁止自动发布；发布前人工复核官方来源、费用限制、隐私安全和版权边界"],
+  "editorial": {
+    "title": "AI 新发现：2 个值得留意的新坐标",
+    "summary": "整理 2 个近期 AI 模型、产品或应用，重点看用途、门槛和风险。",
+    "overview": ["Agent 工具正在从聊天窗口走向工作流。", "图像模型继续强调中文提示词和商用边界。"]
+  }
+}

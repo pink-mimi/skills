@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <rect width="1200" height="675" fill="#F5FAFD"/>
+  <rect x="70" y="70" width="1060" height="535" rx="28" fill="#FFFFFF" stroke="#168B9B" stroke-width="4"/>
+  <text x="110" y="150" fill="#123E4A" font-family="Arial, sans-serif" font-size="54" font-weight="700">AI 新发现研究</text>
+  <text x="110" y="218" fill="#315F7A" font-family="Arial, sans-serif" font-size="28">模型 · 产品 · 应用 · 案例</text>
+  <circle cx="850" cy="320" r="130" fill="none" stroke="#168B9B" stroke-width="8"/>
+  <circle cx="850" cy="320" r="58" fill="#168B9B"/>
+  <path d="M735 420 C805 365 885 385 970 265" fill="none" stroke="#F28C45" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="735" cy="420" r="16" fill="#FFFFFF" stroke="#F28C45" stroke-width="8"/>
+  <circle cx="970" cy="265" r="16" fill="#FFFFFF" stroke="#F28C45" stroke-width="8"/>
+  <text x="110" y="505" fill="#123E4A" font-family="Arial, sans-serif" font-size="30">标准内容包 → 微信审核包 → 人工发布</text>
+</svg>
