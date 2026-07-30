@@ -30,10 +30,13 @@
 
 GitHub 热门封面可使用 `<目录>/cover.png` 作为 Image2 无字底图。画面应是“开源坐标地图”：10 个发光项目节点、路线、代码窗口或工具图标，不能包含文字、Logo、水印、真实 GitHub 标识或虚构软件界面。脚本会把它裁切成横版和方形封面，并用本地字体叠加中文标题。没有 Image2 封面时，本地兜底图也必须画出本周 10 个项目节点和路线。
 
-每个项目对应 `<目录>/projects/NN.png`。选择顺序如下：
+每个项目可对应 `<目录>/projects/NN.png`。选择顺序如下：
 
-1. `--project-image-dir` 中的官方图：必须同时存在 `source-manifest.json`，且项目、来源 URL、真实界面标记、`license_status: verified` 与 `usage_status: approved` 均匹配内容包中的已批准官方截图。官方图通常来自项目 README/docs/homepage，但只有 repo 内图片且授权状态已核验时才会自动使用。
+1. `--project-image-dir` 中的官方图：必须同时存在 `source-manifest.json`，且项目、来源 URL、真实界面标记与 `usage_status: approved` 均匹配内容包中的已批准官方截图。官方图通常来自项目 README/docs/homepage；repo 内 README/docs 真实截图可作为官方项目图使用，授权和许可证状态仍写入审核区。
+   - 如果没有传入 `--project-image-dir`，渲染器会直接读取内容包 `visual_candidates` 里的 `approved` 官方截图 URL，联网下载后等比放入 1200×675 画布；下载失败、超出大小或格式异常时，该项目不展示图片，并在 manifest 写明原因。
 2. `--image-input-dir` 中的 Image2 图：依据内容包 `image2_brief` 生成，只表达已核验用途，不得出现 Logo、文字、虚构界面或虚构数据。
-3. 本地项目卡片：前两级不可用时自动生成，保证每个项目都有一张正文图。
+3. 前两级不可用时，不生成本地项目卡片，也不在读者正文中展示该项目图片。
+
+当整篇 GitHub 热门正文的项目图少于 3 张时，可额外提供 `<目录>/articles/NN.png` 作为文章级 Image2 主题插图；没有这些文件时，渲染器使用本地科技主题图补足。主题插图只表达本期“开源雷达/工具路线/开发者工作流”，不冒充任何项目官方截图。
 
 `--image-mode` 可取 `auto`、`official-only`、`image2`、`template-only`。运行清单记录每张图的实际模式、来源、授权状态和降级原因；这些审核字段不得进入公众号复制区。

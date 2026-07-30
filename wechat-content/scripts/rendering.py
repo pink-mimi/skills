@@ -5,12 +5,14 @@ import difflib
 import html
 import io
 import re
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
+MAX_REMOTE_IMAGE_BYTES = 8 * 1024 * 1024
 
 PALETTES = {
     "news-blue": ("#EAF4FF", "#0B3154", "#1769E0", "#F3A33C"),
@@ -197,6 +199,8 @@ def draw_grid(draw, box, color, step=48):
 
 def cover_panel(size, title, kicker, palette, square=False, base_path=None):
     bg, ink, primary, accent = palette
+    github_cover = "GitHub" in str(kicker)
+    has_base = bool(base_path and Path(base_path).exists())
     if base_path and Path(base_path).exists():
         centering = (0.34, 0.5) if square else (0.5, 0.5)
         with Image.open(base_path) as source:
@@ -208,14 +212,20 @@ def cover_panel(size, title, kicker, palette, square=False, base_path=None):
         veil_draw.rounded_rectangle((22, 24, panel_right, height - 24), 26, fill=(255, 255, 255, 238), outline=primary, width=2)
         image = Image.alpha_composite(image.convert("RGBA"), veil).convert("RGB")
     else:
-        image = Image.new("RGB", size, bg)
+        image = Image.new("RGB", size, "#071827" if github_cover else bg)
     draw = ImageDraw.Draw(image)
     width, height = size
-    if not (base_path and Path(base_path).exists()):
-        draw_grid(draw, (0, 0, width, height), "#DCEAEC", 54)
-        draw.rounded_rectangle((24, 24, width - 24, height - 24), 28, fill="#FFFFFF", outline=primary, width=2)
-    github_cover = "GitHub" in str(kicker)
-    if github_cover and not (base_path and Path(base_path).exists()):
+    if not has_base:
+        if github_cover:
+            draw_grid(draw, (0, 0, width, height), "#17324A", 54)
+            for offset in range(-height, width, 90):
+                draw.line((offset, height, offset + height, 0), fill="#0E2538", width=2)
+            draw.rounded_rectangle((24, 24, width - 24, height - 24), 28, fill="#091E2F", outline=primary, width=2)
+            draw.rounded_rectangle((42, 42, width - 42, height - 42), 22, outline="#1FB6C966", width=1)
+        else:
+            draw_grid(draw, (0, 0, width, height), "#DCEAEC", 54)
+            draw.rounded_rectangle((24, 24, width - 24, height - 24), 28, fill="#FFFFFF", outline=primary, width=2)
+    if github_cover and not has_base:
         nodes = (
             [(width - 245, 78), (width - 175, 118), (width - 100, 88), (width - 222, 182), (width - 142, 214),
              (width - 66, 174), (width - 246, 296), (width - 168, 322), (width - 88, 284), (width - 42, 332)]
@@ -223,31 +233,39 @@ def cover_panel(size, title, kicker, palette, square=False, base_path=None):
             [(width - 93, 84), (width - 53, 126), (width - 132, 153), (width - 76, 196), (width - 148, 242),
              (width - 58, 274), (width - 132, 315), (width - 86, 340)]
         )
+        radar = (width - 302, 40, width - 24, height - 42) if not square else (width - 210, 68, width + 28, height - 30)
+        for expand in (0, 52, 104):
+            box = (radar[0] + expand, radar[1] + expand, radar[2] - expand, radar[3] - expand)
+            if box[0] < box[2] and box[1] < box[3]:
+                draw.arc(box, 205, 345, fill="#1FB6C944", width=2)
         for start, end in zip(nodes, nodes[1:]):
             draw.line((*start, *end), fill=accent, width=4)
         for position, (x, y) in enumerate(nodes, 1):
             radius = 15 if position <= 3 else 11
-            draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill="#FFFFFF", outline=primary, width=4)
+            draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill="#082032", outline=primary, width=4)
+            draw.ellipse((x - 4, y - 4, x + 4, y + 4), fill="#EAFBFF")
             if not square and position <= 10:
-                draw.text((x - 7, y - 9), str(position), font=font(12, True), fill=primary)
+                draw.text((x - 7, y - 9), str(position), font=font(12, True), fill="#EAFBFF")
         draw.arc((width - 310, 48, width - 28, height - 34), 205, 345, fill=primary, width=5)
-    elif square and not (base_path and Path(base_path).exists()):
+    elif square and not has_base:
         draw.ellipse((width - 118, height - 122, width - 38, height - 42), fill=primary)
         draw.arc((width - 180, height - 190, width - 20, height - 30), 195, 340, fill=accent, width=8)
-    elif not (base_path and Path(base_path).exists()):
+    elif not has_base:
         draw.ellipse((width - 205, -55, width + 55, 205), fill=primary)
         draw.arc((width - 260, 120, width - 25, 355), 200, 350, fill=accent, width=10)
         draw.line((width - 235, 265, width - 80, 215), fill=accent, width=8)
         draw.ellipse((width - 247, 255, width - 225, 277), fill="#FFFFFF", outline=accent, width=4)
     left = 54 if not square else 38
     display_kicker = kicker if not square else kicker.split("·")[0].strip()
-    draw.text((left, 58), display_kicker, font=font(24 if not square else 21, True), fill=primary)
+    kicker_fill = accent if github_cover and not has_base else primary
+    title_fill = "#EAFBFF" if github_cover and not has_base else ink
+    draw.text((left, 58), display_kicker, font=font(24 if not square else 21, True), fill=kicker_fill)
     display_title = re.sub(r"\s+", "", title)
-    panel_right = width - 42 if square else (int(width * 0.58) - 30 if base_path and Path(base_path).exists() else width - 42)
+    panel_right = width - 42 if square else (int(width * 0.58) - 30 if has_base else width - 42)
     words,title_font = fit_cover_title(draw,display_title,panel_right-left,2,34 if square else 39,24)
     y = 112
     for line in words[:2]:
-        draw.text((left, y), line, font=title_font, fill=ink)
+        draw.text((left, y), line, font=title_font, fill=title_fill)
         y += 58 if not square else 50
     draw.rounded_rectangle((left, height - 72, min(width - 40, left + 220), height - 42), 15, fill=accent)
     draw.text((left + 16, height - 69), "未完地图 · 保持好奇", font=font(17, True), fill="#FFFFFF")
@@ -305,6 +323,61 @@ def ending_card(size, content_type, palette):
     return image
 
 
+def normalize_project_image(source: Image.Image, size=(1200, 675)) -> Image.Image:
+    canvas = Image.new("RGB", size, "#F5FAFD")
+    image = source.convert("RGB")
+    image.thumbnail(size, Image.Resampling.LANCZOS)
+    x = (size[0] - image.width) // 2
+    y = (size[1] - image.height) // 2
+    canvas.paste(image, (x, y))
+    return canvas
+
+
+def github_topic_card(size, payload, index, palette):
+    bg, ink, primary, accent = palette
+    width, height = size
+    image = Image.new("RGB", size, "#071827")
+    draw = ImageDraw.Draw(image)
+    draw_grid(draw, (0, 0, width, height), "#17324A", 54)
+    draw.rounded_rectangle((54, 52, width - 54, height - 52), 34, fill="#092033", outline=primary, width=3)
+    draw.text((92, 96), "本周开源雷达", font=font(34, True), fill=accent)
+    labels = []
+    try:
+        labels = [str(value) for value in (payload.get("editorial") or {}).get("visual_routes") or []]
+    except AttributeError:
+        labels = []
+    if not labels:
+        labels = [
+            str((item.get("reader_card") or {}).get("category_label") or item.get("category") or "开源项目")
+            for item in (payload.get("items") or [])[:5]
+        ]
+    labels = [value for value in labels if value][:5] or ["工具", "资料", "工作流"]
+    subtitle = [
+        "热榜只是入口，真正值得留下来的，",
+        "是能在具体场景里少绕路的项目。",
+        "先看用途，再决定收藏。",
+    ][(index - 1) % 3]
+    draw.text((92, 154), subtitle, font=font(24), fill="#CDE7F2")
+    radar_box = (width - 460, 92, width - 88, height - 92)
+    for inset in (0, 70, 140, 210):
+        box = (radar_box[0] + inset, radar_box[1] + inset, radar_box[2] - inset, radar_box[3] - inset)
+        if box[0] < box[2] and box[1] < box[3]:
+            draw.arc(box, 205, 345, fill="#1FB6C955", width=3)
+    node_positions = [(790, 190), (900, 136), (1028, 216), (842, 348), (1014, 424)]
+    for start, end in zip(node_positions, node_positions[1:]):
+        draw.line((*start, *end), fill=accent, width=5)
+    for number, (x, y) in enumerate(node_positions, 1):
+        draw.ellipse((x - 22, y - 22, x + 22, y + 22), fill="#082032", outline=primary, width=5)
+        draw.text((x - 7, y - 12), str(number), font=font(18, True), fill="#EAFBFF")
+    y = 260
+    for offset, label in enumerate(labels[:4]):
+        pill_y = y + offset * 62
+        draw.rounded_rectangle((92, pill_y, 420, pill_y + 40), 20, fill="#0F3148", outline="#1FB6C966", width=2)
+        draw.text((116, pill_y + 8), label[:18], font=font(20, True), fill="#EAFBFF")
+    draw.text((92, height - 108), "未完地图 · GitHub 热门", font=font(24, True), fill=primary)
+    return image
+
+
 def news_overview_card(size, items, palette, base_path=None):
     bg, ink, primary, accent = palette
     if base_path and Path(base_path).exists():
@@ -349,6 +422,7 @@ def render_images(
     title: str,
     visual: dict | None = None,
     project_images: list[dict] | None = None,
+    article_images: list[dict] | None = None,
 ):
     directory.mkdir(parents=True, exist_ok=True)
     palette = tuple(visual["palette"]) if visual else PALETTES[theme]
@@ -375,11 +449,45 @@ def render_images(
             target = directory / f"项目-{index:02d}.png"
             choice = choices.get(index) or {}
             source_path = choice.get("source_path")
-            if choice.get("image_mode") in {"official_verified", "live_image2"} and source_path:
-                with Image.open(source_path) as source:
-                    source.convert("RGB").save(target, optimize=True)
-            else:
+            if int(payload.get("schema_version", 1)) != 2:
                 body_card((1200, 675), item, index, payload["content_type"], palette).save(target, optimize=True)
+            elif choice.get("image_mode") in {"official_verified", "live_image2"} and source_path:
+                with Image.open(source_path) as source:
+                    normalize_project_image(source).save(target, optimize=True)
+            elif choice.get("image_mode") == "official_verified" and choice.get("source_url"):
+                try:
+                    source_url = str(choice.get("source_url") or "")
+                    if Path(source_url).is_file():
+                        with Image.open(source_url) as source:
+                            normalize_project_image(source).save(target, optimize=True)
+                    else:
+                        request = urllib.request.Request(
+                            source_url,
+                            headers={"User-Agent": "wechat-content/3.1"},
+                        )
+                        with urllib.request.urlopen(request, timeout=20) as response:
+                            blob = response.read(MAX_REMOTE_IMAGE_BYTES + 1)
+                        if len(blob) > MAX_REMOTE_IMAGE_BYTES:
+                            raise OSError("remote image exceeds maximum size")
+                        with Image.open(io.BytesIO(blob)) as source:
+                            normalize_project_image(source).save(target, optimize=True)
+                    choice["source_path"] = str(target)
+                except Exception:
+                    choice.update(
+                        image_mode="omitted",
+                        source_path="",
+                        fallback_reason="official_image_download_failed",
+                    )
+            elif target.exists():
+                target.unlink()
+        for index, choice in enumerate(article_images or [], 1):
+            target = directory / str(choice.get("filename") or f"主题插图-{index:02d}.png")
+            source_path = choice.get("source_path")
+            if choice.get("image_mode") == "live_image2" and source_path:
+                with Image.open(source_path) as source:
+                    normalize_project_image(source).save(target, optimize=True)
+            else:
+                github_topic_card((1200, 675), payload, index, palette).save(target, optimize=True)
     ending_card((1200, 675), payload["content_type"], palette).save(directory / "结尾图.png", optimize=True)
     return visual.get("image_mode", "weekday_fallback") if use_bundled_base else "template_fallback"
 

@@ -35,4 +35,4 @@
 
 `stars`、`forks`、`weekly_stars` 等动态指标必须带 `verified_at`。无法可靠确认周增 Star 时写 `null`，不得写 0。未找到许可证时使用 `license.status: not_found`，不得推断项目可自由商用。
 
-只有 repo 内 README/docs 图片、来源明确、许可证已核验且 `usage_status: approved` 的官方截图可自动使用。外站图片、授权未知图片、Logo、badge、头像和社交预览图不得自动进入正文；没有 approved 图片时，下游使用 `image2_brief` 生成项目示意图。
+repo 内 README/docs 真实截图、来源明确且 `usage_status: approved` 的图片可作为官方项目图候选；即使仓库许可证字段未被 API 明确识别，也不得把 repo 内 README/docs 的真实截图误判为不可用，但必须保留 `license_status`、`license_name` 和 `usage_basis` 供审核区查看。外站图片、Logo、badge、头像和社交预览图不得自动进入正文；没有 approved 图片时，下游可使用 `image2_brief` 生成项目示意图，或在项目处不展示图片。

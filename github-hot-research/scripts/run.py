@@ -535,7 +535,8 @@ def extract_readme_visual_candidates(readme_text, repo, source_page, license_inf
             continue
         repo_hosted = f"raw.githubusercontent.com/{repo}/" in url
         license_status = clean_text((license_info or {}).get("status"))
-        usage_status = "approved" if repo_hosted and license_status == "verified" else "review_required"
+        usage_status = "approved" if repo_hosted else "review_required"
+        usage_basis = "repo_hosted_readme_image" if repo_hosted else "external_image_review_required"
         candidates.append({
             "type": image_type,
             "url": url,
@@ -548,6 +549,7 @@ def extract_readme_visual_candidates(readme_text, repo, source_page, license_inf
             "license_name": clean_text((license_info or {}).get("name")),
             "attribution_required": False,
             "usage_status": usage_status,
+            "usage_basis": usage_basis,
             "verified_at": verified_at,
         })
     return candidates[:3]
@@ -673,7 +675,18 @@ def normalize_visual_candidates(row):
         if usage not in VISUAL_USAGE:
             usage = "review_required"
         license_status = clean_text(visual.get("license_status"))
-        if license_status != "verified" and usage == "approved":
+        repo_hosted = bool(visual.get("is_repo_hosted")) or (
+            "raw.githubusercontent.com/" in clean_text(visual.get("url"))
+            and "github.com/" in clean_text(visual.get("source_page"))
+        )
+        if (
+            repo_hosted
+            and clean_text(visual.get("type")) == "official_screenshot"
+            and usage == "review_required"
+        ):
+            usage = "approved"
+            visual.setdefault("usage_basis", "repo_hosted_readme_image")
+        if license_status != "verified" and usage == "approved" and not repo_hosted:
             usage = "review_required"
         if clean_text(visual.get("type")) in {"logo", "social_preview"} and usage == "approved":
             usage = "review_required"
@@ -802,6 +815,8 @@ def build(raw, run_at, config, output_root):
     locked_trending = raw.get("meta", {}).get("source") == "github_trending_weekly" or all(
         (row.get("trending") or {}).get("period") == "weekly" for row in rows[:target_count]
     )
+    if locked_trending:
+        past = set()
     selection_rows = (
         sorted(rows, key=lambda item: int((item.get("trending") or {}).get("rank") or 9999))
         if locked_trending

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 
 
 def hash_text(value):
@@ -61,12 +62,14 @@ def route_phrase(payload):
 def closing_detail(payload, observations):
     first = str((observations or [""])[0]).strip()
     single_project_markers = ("如果你", "它像是", "它是", "这个项目", "这个仓库")
-    if first and not any(marker in first for marker in single_project_markers):
+    has_english_description = bool(re.search(r"[A-Za-z]{3,}\s+[A-Za-z]{3,}", first))
+    if first and not has_english_description and not any(marker in first for marker in single_project_markers):
         return first
     return (
-        f"这期更像一组分岔路：有人想更快理解世界，有人想把注意力重新安放好，"
-        f"也有人在补 AI 学习、开发流程和具体业务工具里的短板。"
-        f"先按自己的问题进入，通常比按 Star 数字从头看到尾更有收获。"
+        "这期更像一组分岔路：有人在重做协作入口，有人在把复杂信息压成看板，"
+        "也有人继续打磨 AI 编程、学习资料和工程审查工具。"
+        "真正值得留下来的，不是今天涨了多少 Star，而是下周遇到具体问题时，"
+        "它还能不能帮你少绕一段路。"
     )
 
 
@@ -94,35 +97,33 @@ def build_opening_variants(payload):
     if editorial.get("opening_mode") == "theme" and editorial.get("theme_evidence"):
         evidence = editorial["theme_evidence"]
         names = "、".join(row["repo"] for row in evidence[:3])
+        routes = route_phrase(payload)
         first = [
-            f"过去一周，{names} 等项目集中受到关注。它们共同指向一个变化："
-            f"{editorial.get('weekly_theme') or '开发者正在把复杂技术变成可以实际使用的工具'}。",
-            f"我们从本周突然走红的项目中挑出 {len(items)} 个。下面不只看 Star，"
-            "还会说明它们为什么火、能解决什么问题，以及谁最值得收藏。",
-            "热度负责把坐标点亮，真正值得抵达的，是那些能把问题说清楚、把工具做实的项目。",
+            f"这一周的 GitHub 热榜，有点像把开发者最近的焦虑摊在桌面上：信息太多、工具太散、AI 能力又更新得太快。",
+            f"{names} 先亮了起来，但它们不是同一种答案，而是几条不同路线同时冒头：{routes or editorial.get('weekly_theme') or '复杂技术怎样变成普通开发者也能立刻试用的工具'}。",
+            "所以这篇不按“谁 Star 多”来凑热闹。每个项目只看几件事：它原本想解决什么、这周为什么被看见、谁真的可能用得上。",
+            "你不用一次收藏 10 个。能从里面挑出一个马上试、一个留着学、一个继续观察，这期热榜就不算白看。",
         ]
         return [
             first,
             [
-                f"换个角度看，本周突然升温的项目里，{names} 指向了同一条路线："
-                f"{editorial.get('weekly_theme') or '把复杂技术做成真正可用的工具'}。",
-                f"这期留下 {len(items)} 个坐标。除了热度，我们更关心它们解决什么问题、适合谁，以及上手需要什么。",
-                "数字让项目被看见，持续解决问题的能力决定它能走多远。",
+                f"换个角度看，本周突然升温的项目里，{names} 只是最先被看见的几个坐标。",
+                f"往下看会发现几条路线交错在一起：{routes or editorial.get('weekly_theme') or '工具、资料和工作流都在重新长出入口'}。",
+                "这篇更像一张筛选清单：先看官方描述，再看一句话概况和适合人群，最后决定它该进收藏夹，还是只做一次路过的信号。",
             ],
             [
-                f"{names} 在同一周进入开发者视野，并不是偶然。"
-                f"它们都在尝试{editorial.get('weekly_theme') or '降低复杂技术的使用门槛'}。",
-                f"下面这 {len(items)} 个项目来自本周热度变化，也经过用途和维护核验。",
-                "这是一张本周开源地图，也是一份可以按需收藏的工具清单。",
+                f"{names} 在同一周进入开发者视野，并不是偶然，但它们也不是同一种答案。",
+                f"这一期更像几条支线同时亮灯：{routes or editorial.get('weekly_theme') or '有人做工具，有人整理知识，有人改造工作流'}。",
+                f"下面这 {len(items)} 个项目按 GitHub 周榜顺序整理。先别急着被数字带走，看看它们各自把哪类麻烦变小了一点。",
             ],
         ]
     first = [
-        "这一周的 GitHub 热榜有点分裂。",
-        f"一边是 {route_phrase(payload)}，继续把“工具替人整理信息”往前推；"
-        "另一边也在提醒我们，开源不只关心模型，也关心人怎么工作、东西怎么送达、问题怎么被拆开解决。",
+        "这一周的 GitHub 热榜有点分裂，但也因此更值得看：它不是单一趋势的合影，更像一组真实需求的现场。",
+        f"本周开源雷达扫到几条不同路线：{route_phrase(payload)}。"
+        "有人在重做协作入口，有人在压缩信息噪音，也有人继续把 AI 编程和工程工具往可用处推。",
         f"下面这 {len(items)} 个项目按 GitHub 周榜顺序整理。你不一定都要试，"
-        "但可以从里面挑出几个值得收藏的位置：一个能马上试用的工具，一个适合系统学习的资料，"
-        "或者一个和你当前工作最接近的项目。",
+        "先看它解决什么问题，再从里面挑几个值得收藏的位置：一个能马上试用的工具，"
+        "一个适合系统学习的资料，或者一个和你当前工作最接近的项目。",
     ]
     return [
         first,
@@ -151,6 +152,10 @@ def image_label(item):
     }.get(mode, "项目用途视觉")
 
 
+def should_render_project_image(item):
+    return (item.get("_project_image") or {}).get("image_mode") in {"official_verified", "live_image2"}
+
+
 def build_project(item, index):
     card = item["reader_card"]
     edit = item["editorial"]
@@ -164,7 +169,7 @@ def build_project(item, index):
         parts.append(f"本周 +{metric(metrics['weekly_stars'])}")
     if metrics.get("forks") is not None:
         parts.append(f"{metric(metrics['forks'])} Fork")
-    return [
+    lines = [
         "<!-- github-project:start -->",
         "",
         "---",
@@ -175,8 +180,10 @@ def build_project(item, index):
         "",
         f"**描述：** {project_description(item)}",
         "",
-        f"![{image_label(item)}](images/项目-{index:02d}.png)",
-        "",
+    ]
+    if should_render_project_image(item):
+        lines.extend([f"![{image_label(item)}](images/项目-{index:02d}.png)", ""])
+    lines.extend([
         f"<!-- github-metrics:{'|'.join(parts)} -->",
         "",
         f"> **一句话概况**　{card.get('recommendation') or edit['use_case']}",
@@ -190,7 +197,8 @@ def build_project(item, index):
         f"**项目地址：** [{item['official_url']}]({item['official_url']})",
         "",
         "<!-- github-project:end -->",
-    ]
+    ])
+    return lines
 
 
 def build_closing_variants(payload):
@@ -203,24 +211,24 @@ def build_closing_variants(payload):
         lead = f"这 {len(payload.get('items') or [])} 个项目里，最值得看的不只是 Star 数字，而是它们分别指向了几个真实需求：{route_phrase(payload)}。"
     detail = closing_detail(payload, observations)
     first = [
-        "## 如果只收藏三个",
+        "## 最后，别让收藏夹变成仓库墓地",
         "",
         lead,
         "",
         detail,
         "",
-        "如果只收藏三个，我会优先看：",
+        "如果只收藏三个，我会按这个顺序挑：",
         "",
-        "- 一个能马上试用的工具；",
-        "- 一个能系统学习的资料；",
-        "- 一个和你当前工作最接近的项目。",
+        "- 先挑一个今晚就能打开试试的工具，看它是不是真的省事；",
+        "- 再留一个能系统补课的资料型项目，给未来的自己铺路；",
+        "- 最后选一个最贴近当前工作的问题，让热榜变成下周还能继续用的线索。",
         "",
-        "> 开源热榜每天都在变，但真正值得留下来的，通常是那些能让你下周还想再打开一次的东西。",
+        "> Star 会涨会跌，真正有用的项目，会在某个具体时刻替你省下一段弯路。",
         "",
         "![结尾图](images/结尾图.png)",
     ]
     second = [
-        "## 如果只收藏三个",
+        "## 最后，别让收藏夹变成仓库墓地",
         "",
         "本周突然升温的数字会慢慢回落，但项目背后的需求不会因此消失。",
         "",
@@ -233,7 +241,7 @@ def build_closing_variants(payload):
         "![结尾图](images/结尾图.png)",
     ]
     third = [
-        "## 如果只收藏三个",
+        "## 最后，别让收藏夹变成仓库墓地",
         "",
         f"把这些项目留在同一期，不是因为它们拥有相似的数字，而是因为它们分别落在{categories}这些坐标上。",
         "",
@@ -264,8 +272,21 @@ def build_article(payload, history=None):
     for paragraph in opening_text.split("\n\n"):
         lines.extend([paragraph, ""])
     lines.append("<!-- github-opening:end -->")
+    article_images = payload.get("_article_images") or []
+    used_article_images = set()
+    if article_images:
+        used_article_images.add(0)
+        lines.extend(["", f"![本周开源雷达](images/{article_images[0]['filename']})"])
     for index, item in enumerate(payload["items"], 1):
         lines.extend(build_project(item, index))
+        if article_images and index in {4, 7}:
+            image_index = 1 if index == 4 else 2
+            if len(article_images) > image_index:
+                used_article_images.add(image_index)
+                lines.extend(["", f"![开源项目路线图](images/{article_images[image_index]['filename']})"])
+    for image_index, image_record in enumerate(article_images):
+        if image_index not in used_article_images:
+            lines.extend(["", f"![开源项目路线图](images/{image_record['filename']})"])
     closing_variants = build_closing_variants(payload)
     closing_text = choose_variant(
         ["\n\n".join(value) for value in closing_variants],

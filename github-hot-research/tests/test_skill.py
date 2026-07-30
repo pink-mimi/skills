@@ -345,7 +345,8 @@ class GithubHotResearchTests(unittest.TestCase):
         self.assertEqual(enriched[0]["reader_card"]["metrics"]["weekly_stars"], 11342)
         visuals = enriched[0]["visual_candidates"]
         self.assertEqual(visuals[0]["url"], "https://raw.githubusercontent.com/koala73/worldmonitor/main/docs/world-monitor-dashboard.png")
-        self.assertEqual(visuals[0]["usage_status"], "review_required")
+        self.assertEqual(visuals[0]["usage_status"], "approved")
+        self.assertEqual(visuals[0]["usage_basis"], "repo_hosted_readme_image")
         self.assertEqual(
             enriched[0]["reader_card"]["original_description"],
             "Real-time global intelligence dashboard.",
@@ -397,7 +398,7 @@ class GithubHotResearchTests(unittest.TestCase):
         rejected = next(row for row in package["candidates"] if row["repo"] == "example/project-13")
         self.assertTrue(rejected.get("rejection_reasons"))
 
-    def test_recent_eight_issue_history_excludes_unchanged_project(self):
+    def test_weekly_trending_keeps_top_ten_even_if_seen_recently(self):
         with tempfile.TemporaryDirectory() as temp:
             history = Path(temp) / "github-hot/2026-07-19"
             history.mkdir(parents=True)
@@ -405,8 +406,13 @@ class GithubHotResearchTests(unittest.TestCase):
                 json.dumps({"items": [{"repo": "example/project-01"}]}),
                 encoding="utf-8",
             )
-            package = self.build(output_root=temp)
-            self.assertNotIn("example/project-01", [item["repo"] for item in package["items"]])
+            raw = raw_candidates()
+            raw["meta"]["source"] = "github_trending_weekly"
+            for index, item in enumerate(raw["items"], 1):
+                item["trending"] = {"rank": index, "period": "weekly", "url": "https://github.com/trending?since=weekly"}
+            package = self.build(raw, output_root=temp)
+            self.assertEqual(package["items"][0]["repo"], "example/project-01")
+            self.assertEqual(package["history_excluded"], [])
 
     def test_ai_projects_are_capped_at_three(self):
         raw = raw_candidates()
@@ -474,6 +480,26 @@ class GithubHotResearchTests(unittest.TestCase):
             "visual_candidates"
         ][0]
         self.assertEqual(visual["usage_status"], "review_required")
+
+    def test_repo_hosted_readme_visual_is_upgraded_from_old_review_required_snapshot(self):
+        raw = raw_candidates()
+        raw["items"][0]["visual_candidates"] = [
+            {
+                "type": "official_screenshot",
+                "url": "https://raw.githubusercontent.com/example/project-01/main/docs/demo.png",
+                "source_page": "https://github.com/example/project-01#readme",
+                "is_repo_hosted": True,
+                "license_status": "not_found",
+                "usage_status": "review_required",
+                "verified_at": "2026-07-26T08:30:00+08:00",
+            }
+        ]
+        package = self.build(raw)
+        visual = next(item for item in package["candidates"] if item["repo"] == "example/project-01")[
+            "visual_candidates"
+        ][0]
+        self.assertEqual(visual["usage_status"], "approved")
+        self.assertEqual(visual["usage_basis"], "repo_hosted_readme_image")
 
     def test_code_license_is_not_automatically_applied_to_logo(self):
         raw = raw_candidates()

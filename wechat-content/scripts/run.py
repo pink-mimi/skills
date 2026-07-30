@@ -11,6 +11,7 @@ from pathlib import Path
 from rendering import build_article as build_legacy_article, build_html, render_images
 from github_hot_column import article_section_hash, build_article as build_github_hot_article
 from github_hot_visuals import (
+    select_article_images,
     select_project_images,
     select_theme as select_github_theme,
     valid_project_image,
@@ -181,9 +182,13 @@ def verify(out: Path, payload: dict) -> None:
         path=out/"images"/"新闻一日脉络.png"
         if not path.exists() or png_size(path)!=(1200,675): errors.append("图片异常 新闻一日脉络.png")
     else:
-        for index in range(1, len(payload["items"]) + 1):
-            path = out / "images" / f"项目-{index:02d}.png"
-            if not path.exists() or png_size(path) != (1200, 675): errors.append(f"图片异常 {path.name}")
+        article_path = out / "公众号成稿.md"
+        article = article_path.read_text(encoding="utf-8") if article_path.exists() else ""
+        referenced = sorted(set(re.findall(r"images/([^)\s]+\.png)", article)))
+        for name in referenced:
+            path = out / "images" / name
+            if not path.exists() or png_size(path) != (1200, 675):
+                errors.append(f"图片异常 {path.name}")
     page = (out / "微信版.html").read_text(encoding="utf-8") if (out / "微信版.html").exists() else ""
     for token in ('id="copy-wechat"', 'id="wechat-content"', "ClipboardItem", "data:image/png;base64,"):
         if token not in page:
@@ -234,6 +239,7 @@ def main() -> None:
                 visual["fallback_reason"] = "live_image_invalid"
             visual["image_mode"] = "weekday_fallback"
     project_images = []
+    article_images = []
     github_theme = None
     if payload["content_type"] == "github-hot" and payload.get("schema_version") == 2:
         github_theme = select_github_theme(payload, config["github_themes"])
@@ -244,7 +250,7 @@ def main() -> None:
                 github_theme["accent"],
                 "#F28C45",
             ],
-            "cover_image_mode": "template_fallback",
+            "cover_image_mode": "tech_radar_fallback",
             "cover_path": "",
         }
         cover_path = args.image_input_dir / "cover.png" if args.image_input_dir else None
@@ -258,7 +264,14 @@ def main() -> None:
             args.image_mode,
             int(config["images"]["maximum_bytes"]),
         )
+        article_images = select_article_images(
+            project_images,
+            args.image_input_dir,
+            args.image_mode,
+            int(config["images"]["maximum_bytes"]),
+        )
         payload["_project_images"] = project_images
+        payload["_article_images"] = article_images
         by_rank = {int(record["rank"]): record for record in project_images}
         for index, item in enumerate(payload["items"], 1):
             item["_project_image"] = by_rank.get(index, {})
@@ -271,7 +284,21 @@ def main() -> None:
         else:
             article, title, summary = build_legacy_article(payload)
         cover_title=resolve_cover_title(payload,title)
-        image_mode = render_images(out / "images", payload, theme, cover_title, visual, project_images)
+        image_mode = render_images(out / "images", payload, theme, cover_title, visual, project_images, article_images)
+        if payload["content_type"] == "github-hot" and payload.get("schema_version") == 2:
+            article_images = select_article_images(
+                project_images,
+                args.image_input_dir,
+                args.image_mode,
+                int(config["images"]["maximum_bytes"]),
+            )
+            payload["_article_images"] = article_images
+            article, title, summary = build_github_hot_article(
+                payload,
+                github_copy_history(args.output_root, run_at.date().isoformat()),
+            )
+            cover_title = resolve_cover_title(payload, title)
+            image_mode = render_images(out / "images", payload, theme, cover_title, visual, project_images, article_images)
         write(out / "公众号成稿.md", article)
         write(out / "微信版.html", build_html(article, out / "images", payload, theme, visual, copy_state))
         write(out / "备选标题.txt", "\n".join(title_options(payload["content_type"], title, len(payload["items"]))))
@@ -281,6 +308,11 @@ def main() -> None:
             manifest["project_images"] = [
                 {key:value for key,value in record.items() if key != "source_path"}
                 for record in project_images
+            ]
+        if article_images:
+            manifest["article_images"] = [
+                {key:value for key,value in record.items() if key != "source_path"}
+                for record in article_images
             ]
         if github_theme:
             manifest["github_theme"] = github_theme

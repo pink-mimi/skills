@@ -17,8 +17,9 @@ description: Use when 用户已有标准内容包，需要制作“未完地图�
 4. 读取 [references/visual-and-copy.md](references/visual-and-copy.md) 和 [references/image2-workflow.md](references/image2-workflow.md)，生成标题、摘要、Markdown、内联样式 HTML 和内容相关图片。每日新闻标题必须规范为统计窗口起始日加 `国内要闻：主题概括`，上游 `article_title` 不得绕过此前缀。
    - `daily-news` 使用按北京时间星期选择的“七天七色”主题；只有配置缺失或日期异常时才使用中性“默认兜底”。
    - `github-hot` schema v2 使用编辑卡片式读者结构，并依据本期证据生成动态开头与动态结尾；完整许可证、维护、核验时间、内部风险、淘汰原因和图片授权信息必须位于复制区外，不把审核负担转嫁给读者。
-   - GitHub 项目图按“已批准官方真实截图 → 当期 Image2 用途示意图 → 本地项目卡片”降级；不得自动使用授权未知或 `review_required` 的素材。
-   - 已生成当期 Image 2 无字图时，传入 `--image-input-dir`；否则使用对应星期素材。
+   - GitHub 项目图按“已批准官方真实截图 → 当期 Image2 用途示意图”选择；二者都不可用时，该项目不展示图片，禁止用低质本地项目卡硬凑。
+   - GitHub 正文项目图少于 3 张时，使用 `--image-input-dir/articles/NN.png` 的 Image2 文章级主题插图补足；没有 Image2 主题图时才使用本地科技主题插图，保证整篇至少有三四张可读图片。
+   - 已生成当期 Image 2 无字图时，传入 `--image-input-dir`；否则使用对应栏目兜底素材。
 5. 封面固定输出 `1283×383` 合并图：左侧 `900×383` 长封面，右侧 `383×383` 方封面；同时导出两个独立上传文件。
 6. 输出 `render-manifest.json`，记录内容模板、主题及版本，保证同一内容包可稳定重排。
 7. 运行 `verify`。`OK` 表示正文完整且全部新闻已经核验；`OK_WITH_REVIEW_REQUIRED` 表示允许复制排版，但仍有部分核验或未核验内容、不得直接发布；`STRUCTURE_OK_CONTENT_NEEDS_REVIEW` 表示读者正文仍不完整，复制按钮禁用。再用微信手机预览人工检查。

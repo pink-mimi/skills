@@ -385,6 +385,35 @@ class WechatContentTests(unittest.TestCase):
             self.assertEqual(manifest["project_images"][0]["image_mode"], "official_verified")
             self.assertIn("项目官方截图", (out / "公众号成稿.md").read_text(encoding="utf-8"))
 
+    def test_official_project_image_is_normalized_to_wechat_body_size(self):
+        with tempfile.TemporaryDirectory() as temp:
+            official = Path(temp) / "official"
+            official_image = official / "projects/01.png"
+            official_image.parent.mkdir(parents=True, exist_ok=True)
+            Image.new("RGB", (900, 500), (20, 40, 60)).save(official_image)
+            (official / "source-manifest.json").write_text(
+                json.dumps(
+                    {
+                        "images": [
+                            {
+                                "rank": 1,
+                                "repo": "example/project",
+                                "source_url": "https://raw.githubusercontent.com/example/project/main/docs/demo.png",
+                                "license_status": "verified",
+                                "usage_status": "approved",
+                                "is_real_interface": True,
+                                "verified_at": "2026-07-26T08:30:00+08:00",
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            out = self.build("github-hot-content-package-v2.json", temp, extra=["--project-image-dir", str(official)])
+            from github_hot_visuals import png_size
+            self.assertEqual(png_size(out / "images/项目-01.png"), (1200, 675))
+
     def test_review_required_official_image_is_not_used_automatically(self):
         payload = self.github_v2_fixture()
         payload["items"][0]["visual_candidates"][0]["usage_status"] = "review_required"
@@ -440,7 +469,15 @@ class WechatContentTests(unittest.TestCase):
             self.assertEqual(manifest["cover_image_mode"], "live_image2")
             self.assertEqual(manifest["image_mode"], "template_fallback")
 
-    def test_invalid_or_missing_image2_uses_local_project_card(self):
+    def test_github_missing_image2_uses_tech_radar_cover_fallback(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = self.build("github-hot-content-package-v2.json", temp)
+            manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["cover_image_mode"], "tech_radar_fallback")
+            self.assertTrue((out / "images/横版封面.png").exists())
+            self.assertGreater((out / "images/横版封面.png").stat().st_size, 25_000)
+
+    def test_invalid_or_missing_image2_omits_project_image_instead_of_local_card(self):
         with tempfile.TemporaryDirectory() as temp:
             generated = Path(temp) / "image2/projects"
             generated.mkdir(parents=True)
@@ -451,8 +488,10 @@ class WechatContentTests(unittest.TestCase):
                 extra=["--image-input-dir", str(generated.parent), "--image-mode", "image2"],
             )
             manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["project_images"][0]["image_mode"], "local_project_visual")
-            self.assertTrue((out / "images/项目-01.png").exists())
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            self.assertEqual(manifest["project_images"][0]["image_mode"], "omitted")
+            self.assertFalse((out / "images/项目-01.png").exists())
+            self.assertNotIn("images/项目-01.png", article)
 
     def test_unknown_source_image_cannot_be_marked_official(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -466,8 +505,9 @@ class WechatContentTests(unittest.TestCase):
             manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
             self.assertNotEqual(manifest["project_images"][0]["image_mode"], "official_verified")
 
-    def test_github_v2_each_project_always_has_one_body_image(self):
+    def test_github_v2_omits_project_cards_but_keeps_article_image_count(self):
         payload = self.github_v2_fixture()
+        payload["items"][0]["visual_candidates"] = []
         second = deepcopy(payload["items"][0])
         second["rank"] = 2
         second["repo"] = "example/project-two"
@@ -477,10 +517,30 @@ class WechatContentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             source = self.write_fixture(temp, payload)
             out = self.build(source, temp)
-            self.assertTrue((out / "images/项目-01.png").exists())
-            self.assertTrue((out / "images/项目-02.png").exists())
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            self.assertFalse((out / "images/项目-01.png").exists())
+            self.assertFalse((out / "images/项目-02.png").exists())
+            self.assertNotIn("images/项目-01.png", article)
+            self.assertIn("images/主题插图-01.png", article)
+            self.assertIn("images/主题插图-02.png", article)
+            self.assertIn("images/主题插图-03.png", article)
+            self.assertTrue((out / "images/主题插图-01.png").exists())
             manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(len(manifest["project_images"]), 2)
+            self.assertEqual(len(manifest["article_images"]), 3)
+
+    def test_github_article_uses_supplied_image2_topic_visuals_when_project_images_are_few(self):
+        payload = self.github_v2_fixture()
+        payload["items"][0]["visual_candidates"] = []
+        with tempfile.TemporaryDirectory() as temp:
+            source = self.write_fixture(temp, payload)
+            generated = Path(temp) / "image2"
+            self.write_png(generated / "articles/01.png", (5, 20, 45))
+            out = self.build(source, temp, extra=["--image-input-dir", str(generated)])
+            manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            self.assertEqual(manifest["article_images"][0]["image_mode"], "live_image2")
+            self.assertIn("images/主题插图-01.png", article)
 
     def test_github_image_audit_information_stays_outside_copy_region(self):
         with tempfile.TemporaryDirectory() as temp:

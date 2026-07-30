@@ -60,7 +60,7 @@ def select_project_images(payload, project_image_dir, image_input_dir, image_mod
             "filename": f"项目-{position:02d}.png",
             "rank": rank,
             "repo": repo,
-            "image_mode": "local_project_visual",
+            "image_mode": "omitted",
             "source_path": "",
             "source_url": "",
             "is_real_interface": False,
@@ -70,6 +70,12 @@ def select_project_images(payload, project_image_dir, image_input_dir, image_mod
             "human_confirmed": False,
             "fallback_reason": "",
         }
+        approved_candidates = [
+            value for value in item.get("visual_candidates") or []
+            if value.get("usage_status") == "approved"
+            and value.get("type") == "official_screenshot"
+            and value.get("url")
+        ]
         if image_mode in {"auto", "official-only"} and project_image_dir:
             entry = next(
                 (
@@ -81,14 +87,12 @@ def select_project_images(payload, project_image_dir, image_input_dir, image_mod
             approved_urls = {
                 value.get("url") for value in item.get("visual_candidates") or []
                 if value.get("usage_status") == "approved"
-                and value.get("license_status") == "verified"
                 and value.get("type") == "official_screenshot"
             }
             official_path = Path(project_image_dir) / filename
             if (
                 entry
                 and entry.get("usage_status") == "approved"
-                and entry.get("license_status") == "verified"
                 and entry.get("source_url") in approved_urls
                 and valid_project_image(official_path, maximum_bytes)
             ):
@@ -97,13 +101,28 @@ def select_project_images(payload, project_image_dir, image_input_dir, image_mod
                     source_path=str(official_path),
                     source_url=str(entry.get("source_url") or ""),
                     is_real_interface=bool(entry.get("is_real_interface")),
-                    license_status="verified",
+                    license_status=str(entry.get("license_status") or ""),
                     usage_status="approved",
                     verified_at=str(entry.get("verified_at") or ""),
                     human_confirmed=bool(entry.get("human_confirmed")),
                 )
         if (
-            record["image_mode"] == "local_project_visual"
+            record["image_mode"] == "omitted"
+            and image_mode in {"auto", "official-only"}
+            and approved_candidates
+        ):
+            candidate = approved_candidates[0]
+            record.update(
+                image_mode="official_verified",
+                source_url=str(candidate.get("url") or ""),
+                is_real_interface=bool(candidate.get("is_real_interface")),
+                license_status=str(candidate.get("license_status") or ""),
+                usage_status="approved",
+                verified_at=str(candidate.get("verified_at") or ""),
+                human_confirmed=bool(candidate.get("human_confirmed")),
+            )
+        if (
+            record["image_mode"] == "omitted"
             and image_mode in {"auto", "image2"}
             and image_input_dir
         ):
@@ -117,11 +136,41 @@ def select_project_images(payload, project_image_dir, image_input_dir, image_mod
                 )
             else:
                 record["fallback_reason"] = "image2_missing_or_invalid"
-        if record["image_mode"] == "local_project_visual" and not record["fallback_reason"]:
+        if record["image_mode"] == "omitted" and not record["fallback_reason"]:
             record["fallback_reason"] = (
                 "official_image_not_approved"
                 if project_image_dir and image_mode in {"auto", "official-only"}
-                else "no_external_project_image"
+                else "no_usable_project_image"
             )
+        records.append(record)
+    return records
+
+
+def select_article_images(project_images, image_input_dir, image_mode, maximum_bytes, minimum_project_or_topic_images=3):
+    usable_project_count = sum(
+        1 for record in project_images
+        if record.get("image_mode") in {"official_verified", "live_image2"}
+    )
+    needed = max(0, minimum_project_or_topic_images - usable_project_count)
+    records = []
+    for index in range(1, needed + 1):
+        filename = f"主题插图-{index:02d}.png"
+        record = {
+            "filename": filename,
+            "rank": index,
+            "image_mode": "local_theme_visual",
+            "source_path": "",
+            "usage_status": "generated_fallback",
+            "fallback_reason": "project_images_below_minimum",
+        }
+        if image_mode in {"auto", "image2"} and image_input_dir:
+            generated_path = Path(image_input_dir) / "articles" / f"{index:02d}.png"
+            if valid_project_image(generated_path, maximum_bytes):
+                record.update(
+                    image_mode="live_image2",
+                    source_path=str(generated_path),
+                    usage_status="generated",
+                    fallback_reason="",
+                )
         records.append(record)
     return records
