@@ -45,6 +45,8 @@ class AiDiscoveryResearchTests(unittest.TestCase):
             data = json.loads(package.read_text(encoding="utf-8"))
             self.assertEqual(data["content_type"], "ai-discovery")
             self.assertEqual(data["schema_version"], 1)
+            self.assertEqual(data["selection"]["selected_count"], 1)
+            self.assertGreaterEqual(data["selection"]["focused_review_count"], 3)
 
     def test_missing_official_source_marks_needs_review(self):
         raw = json.loads(FIXTURE.read_text(encoding="utf-8"))
@@ -71,6 +73,36 @@ class AiDiscoveryResearchTests(unittest.TestCase):
         affected = next(item for item in package["candidates"] if item["name"] == "Atlas Agent Studio")
         self.assertIn("实测声明缺少证据记录", affected["rejection_reasons"])
         self.assertEqual(package["status"], "needs_review")
+
+    def test_selects_one_grade_a_or_b_candidate_and_keeps_c_unselected(self):
+        raw = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        raw["items"][0]["verification_grade"] = "C"
+        package = self.build(raw)
+        self.assertEqual(len(package["items"]), 1)
+        self.assertNotEqual(package["items"][0]["name"], "Atlas Agent Studio")
+        self.assertIn(package["items"][0]["verification_grade"], {"A", "B"})
+        rejected = next(item for item in package["candidates"] if item["name"] == "Atlas Agent Studio")
+        self.assertIn("C 级候选不发布", rejected["rejection_reasons"])
+
+    def test_selected_item_contains_reader_decision_fields(self):
+        package = self.build()
+        item = package["items"][0]
+        for field in (
+            "company",
+            "platforms",
+            "supports_chinese",
+            "mainland_availability",
+            "not_for",
+            "scenarios",
+            "pricing_details",
+            "privacy_and_rights",
+            "public_feedback",
+            "verification_grade",
+        ):
+            self.assertIn(field, item)
+        self.assertGreaterEqual(len(item["scenarios"]), 3)
+        self.assertIn(item["mainland_availability"]["status"], {"可直接使用", "存在限制", "需海外账号"})
+        self.assertTrue(item["pricing_details"]["verified_at"])
 
     def test_research_layer_does_not_generate_wechat_outputs(self):
         package = self.build()

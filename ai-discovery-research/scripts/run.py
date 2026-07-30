@@ -5,7 +5,6 @@ import hashlib
 import json
 import re
 import shutil
-import sys
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -15,6 +14,10 @@ import urllib.request
 
 BJT = timezone(timedelta(hours=8))
 ROOT = Path(__file__).resolve().parents[1]
+
+MAINLAND_STATUSES = {"可直接使用", "存在限制", "需海外账号"}
+PUBLISHABLE_GRADES = {"A", "B"}
+
 REQUIRED_ITEM_FIELDS = (
     "name",
     "type",
@@ -28,6 +31,16 @@ REQUIRED_ITEM_FIELDS = (
     "risks",
     "verification_status",
     "recommendation",
+    "company",
+    "platforms",
+    "supports_chinese",
+    "mainland_availability",
+    "not_for",
+    "scenarios",
+    "pricing_details",
+    "privacy_and_rights",
+    "public_feedback",
+    "verification_grade",
 )
 
 
@@ -63,7 +76,7 @@ def collect(run_at):
     query = quote_plus("AI model product launch official blog OR paper OR Hugging Face")
     request = urllib.request.Request(
         f"https://www.bing.com/search?q={query}",
-        headers={"User-Agent": "ai-discovery-research/1.0"},
+        headers={"User-Agent": "ai-discovery-research/1.1"},
     )
     try:
         page = urllib.request.urlopen(request, timeout=20).read().decode("utf-8", "replace")
@@ -71,7 +84,7 @@ def collect(run_at):
         return {"meta": {"rate_limited": True, "error": str(exc), "fetched_at": run_at.isoformat()}, "items": []}
     titles = re.findall(r"<h2[^>]*>.*?<a[^>]+href=\"([^\"]+)\"[^>]*>(.*?)</a>.*?</h2>", page, flags=re.S | re.I)
     items = []
-    for index, (url, title_html) in enumerate(titles[:10], 1):
+    for index, (url, title_html) in enumerate(titles[:12], 1):
         title = re.sub(r"<[^>]+>", " ", title_html)
         items.append(
             {
@@ -86,24 +99,18 @@ def collect(run_at):
                 "requirements": "待核验",
                 "risks": ["来源和事实仍需人工核验"],
                 "verification_status": "unverified",
+                "verification_grade": "C",
                 "recommendation": "作为候选线索保留，不直接推荐发布。",
             }
         )
     return {"meta": {"rate_limited": False, "fetched_at": run_at.isoformat(), "source": "web_search"}, "items": items}
 
 
-def normalize_candidate(value, rank):
-    row = deepcopy(value)
-    row["rank"] = int(row.get("rank") or rank)
-    row["name"] = clean_text(row.get("name") or row.get("title") or f"AI 新发现 {rank}")
-    row["type"] = clean_text(row.get("type") or "application")
-    row["official_url"] = clean_text(row.get("official_url") or row.get("url"))
-    row["discovered_at"] = clean_text(row.get("discovered_at") or row.get("published_at"))
-    row["official_sources"] = as_list(row.get("official_sources") or row.get("sources"))
-    normalized_sources = []
-    for source in row["official_sources"]:
+def normalize_sources(value, row):
+    normalized = []
+    for source in as_list(value):
         if isinstance(source, dict):
-            normalized_sources.append(
+            normalized.append(
                 {
                     "name": clean_text(source.get("name") or "官方来源"),
                     "url": clean_text(source.get("url")),
@@ -111,14 +118,104 @@ def normalize_candidate(value, rank):
                 }
             )
         else:
-            normalized_sources.append({"name": "官方来源", "url": clean_text(source), "verified_at": clean_text(row.get("verified_at"))})
-    row["official_sources"] = normalized_sources
+            normalized.append({"name": "官方来源", "url": clean_text(source), "verified_at": clean_text(row.get("verified_at"))})
+    return normalized
+
+
+def normalize_mainland_availability(value, row):
+    if isinstance(value, dict):
+        status = clean_text(value.get("status") or row.get("mainland_status") or "存在限制")
+        if status not in MAINLAND_STATUSES:
+            status = "存在限制"
+        return {
+            "status": status,
+            "notes": clean_text(value.get("notes") or value.get("summary") or row.get("requirements")),
+            "requires_special_network": bool(value.get("requires_special_network", False)),
+            "requires_overseas_phone": bool(value.get("requires_overseas_phone", False)),
+            "requires_overseas_card": bool(value.get("requires_overseas_card", False)),
+            "supports_chinese": value.get("supports_chinese", row.get("supports_chinese")),
+            "payment": clean_text(value.get("payment") or row.get("pricing")),
+        }
+    text = clean_text(value or row.get("requirements"))
+    status = "存在限制"
+    for candidate in MAINLAND_STATUSES:
+        if candidate in text:
+            status = candidate
+            break
+    return {
+        "status": status,
+        "notes": text or "大陆可用性待核验",
+        "requires_special_network": "特殊网络" in text or "需海外" in text,
+        "requires_overseas_phone": "海外手机" in text,
+        "requires_overseas_card": "海外卡" in text,
+        "supports_chinese": row.get("supports_chinese"),
+        "payment": clean_text(row.get("pricing")),
+    }
+
+
+def normalize_pricing_details(value, row):
+    if isinstance(value, dict):
+        return {
+            "free": clean_text(value.get("free")),
+            "free_quota": clean_text(value.get("free_quota")),
+            "lowest_paid_price": clean_text(value.get("lowest_paid_price")),
+            "subscription": clean_text(value.get("subscription")),
+            "auto_renewal": clean_text(value.get("auto_renewal")),
+            "paid_only_features": as_list(value.get("paid_only_features")),
+            "currency": clean_text(value.get("currency")),
+            "region": clean_text(value.get("region")),
+            "verified_at": clean_text(value.get("verified_at") or row.get("pricing_verified_at")),
+        }
+    return {
+        "free": clean_text(row.get("free") or ""),
+        "free_quota": "",
+        "lowest_paid_price": clean_text(row.get("pricing") or "待核验"),
+        "subscription": "",
+        "auto_renewal": "",
+        "paid_only_features": [],
+        "currency": "",
+        "region": "",
+        "verified_at": clean_text(row.get("pricing_verified_at") or row.get("verified_at")),
+    }
+
+
+def infer_grade(row):
+    explicit = clean_text(row.get("verification_grade")).upper()
+    if explicit in {"A", "B", "C"}:
+        return explicit
+    official_complete = bool(row.get("official_sources")) and row.get("verification_status") in {"verified", "partial"}
+    feedback = bool(as_list(row.get("public_feedback")))
+    if official_complete and row.get("verification_status") == "verified" and feedback:
+        return "A"
+    if official_complete:
+        return "B"
+    return "C"
+
+
+def normalize_candidate(value, rank):
+    row = deepcopy(value)
+    row["rank"] = int(row.get("rank") or rank)
+    row["name"] = clean_text(row.get("name") or row.get("title") or f"AI 新发现 {rank}")
+    row["type"] = clean_text(row.get("type") or "application")
+    row["company"] = clean_text(row.get("company") or row.get("team") or "待核验")
+    row["official_url"] = clean_text(row.get("official_url") or row.get("url"))
+    row["discovered_at"] = clean_text(row.get("discovered_at") or row.get("published_at"))
+    row["official_sources"] = normalize_sources(row.get("official_sources") or row.get("sources"), row)
     row["use_case"] = clean_text(row.get("use_case") or row.get("summary"))
     row["audience"] = as_list(row.get("audience"))
+    row["not_for"] = as_list(row.get("not_for"))
+    row["scenarios"] = as_list(row.get("scenarios"))
+    row["platforms"] = as_list(row.get("platforms") or row.get("platform"))
+    row["supports_chinese"] = row.get("supports_chinese", "待核验")
     row["pricing"] = clean_text(row.get("pricing") or row.get("cost") or "待核验")
     row["requirements"] = clean_text(row.get("requirements") or row.get("access") or "待核验")
+    row["mainland_availability"] = normalize_mainland_availability(row.get("mainland_availability"), row)
+    row["pricing_details"] = normalize_pricing_details(row.get("pricing_details"), row)
+    row["privacy_and_rights"] = as_list(row.get("privacy_and_rights") or row.get("privacy") or row.get("copyright"))
+    row["public_feedback"] = as_list(row.get("public_feedback"))
     row["risks"] = as_list(row.get("risks"))
     row["verification_status"] = clean_text(row.get("verification_status") or "unverified")
+    row["verification_grade"] = infer_grade(row)
     row["recommendation"] = clean_text(row.get("recommendation") or row.get("why_selected"))
     row["tested"] = bool(row.get("tested", False))
     row["evidence"] = as_list(row.get("evidence"))
@@ -134,14 +231,19 @@ def rejection_reasons(row):
         if field == "official_sources":
             if not row.get(field):
                 reasons.append("缺少官方来源")
-        elif field in {"audience", "risks"}:
+        elif field in {"audience", "risks", "platforms", "not_for", "scenarios", "privacy_and_rights"}:
             if not row.get(field):
+                reasons.append(f"缺少 {field}")
+        elif field in {"mainland_availability", "pricing_details"}:
+            if not isinstance(row.get(field), dict):
                 reasons.append(f"缺少 {field}")
         elif not clean_text(row.get(field)):
             reasons.append(f"缺少 {field}")
+    if row.get("verification_grade") == "C":
+        reasons.append("C 级候选不发布")
     if not any(clean_text(source.get("url")) for source in row.get("official_sources") or []):
         reasons.append("官方来源缺少链接")
-    if row.get("verification_status") in {"verified", "partial"} and not any(
+    if row.get("verification_status") in {"verified", "partial"} and not all(
         clean_text(source.get("verified_at")) for source in row.get("official_sources") or []
     ):
         reasons.append("官方来源缺少核验时间")
@@ -149,29 +251,42 @@ def rejection_reasons(row):
         reasons.append("尚未完成官方来源核验")
     if "待核验" in f"{row.get('pricing')} {row.get('requirements')}":
         reasons.append("费用或使用门槛待核验")
-    if row.get("tested") and not row.get("evidence"):
+    if not clean_text((row.get("pricing_details") or {}).get("verified_at")):
+        reasons.append("价格信息缺少核验时间")
+    availability = row.get("mainland_availability") or {}
+    if availability.get("status") not in MAINLAND_STATUSES:
+        reasons.append("大陆可用性状态不明确")
+    if row.get("tested") and not (row.get("experience_notes") or row.get("test_notes") or row.get("evidence")):
         reasons.append("实测声明缺少证据记录")
     return list(dict.fromkeys(reasons))
 
 
 def build(raw, run_at, config):
     start, end = window(run_at, config)
-    rows = [normalize_candidate(value, index) for index, value in enumerate(raw.get("items", []), 1)]
+    candidate_maximum = int(config["discovery"].get("candidate_maximum", 12))
+    rows = [normalize_candidate(value, index) for index, value in enumerate(raw.get("items", [])[:candidate_maximum], 1)]
     target_count = int(config["selection"]["target"])
+    focused_target = int(config["selection"].get("focused_review_target", 3))
+    focused = [row for row in rows if row["verification_grade"] in PUBLISHABLE_GRADES][:focused_target]
     selected = []
     for row in rows:
-        if row["eligible"] and len(selected) < target_count:
+        if row["eligible"] and row["verification_grade"] in PUBLISHABLE_GRADES and len(selected) < target_count:
             row["selected"] = True
             selected.append(row)
         elif not row["rejection_reasons"] and len(selected) >= target_count:
-            row["rejection_reasons"].append("超过本期目标数量")
-    risks = ["禁止自动发布；发布前人工复核官方来源、费用限制、隐私安全和版权边界"]
+            row["rejection_reasons"].append("超过本期一个重点对象")
+    focused_blockers = [row for row in rows[:focused_target] if row["rejection_reasons"]]
+    risks = ["禁止自动发布；发布前人工复核官方来源、费用限制、隐私安全、版权边界和大陆可用性"]
     candidate_minimum = int(config["discovery"]["candidate_minimum"])
     verified_minimum = int(config["selection"]["verified_minimum"])
     if raw.get("meta", {}).get("rate_limited"):
         risks.append("发现入口采集失败或受限")
     if len(rows) < candidate_minimum:
         risks.append(f"候选少于 {candidate_minimum} 个")
+    if len(focused) < focused_target:
+        risks.append(f"聚焦复核少于 {focused_target} 个")
+    if focused_blockers:
+        risks.append(f"{len(focused_blockers)} 个聚焦候选存在核验缺口")
     if len(selected) < int(config["selection"]["minimum"]):
         risks.append("入选数量不足")
     if sum(row["verification_status"] == "verified" for row in selected) < verified_minimum:
@@ -179,10 +294,13 @@ def build(raw, run_at, config):
     ready = (
         not raw.get("meta", {}).get("rate_limited")
         and len(rows) >= candidate_minimum
+        and len(focused) >= focused_target
+        and not focused_blockers
         and len(selected) == target_count
         and int(config["selection"]["minimum"]) <= len(selected) <= int(config["selection"]["maximum"])
         and sum(row["verification_status"] == "verified" for row in selected) >= verified_minimum
     )
+    selected_name = selected[0]["name"] if selected else "待定 AI 新发现"
     return {
         "schema_version": 1,
         "content_type": "ai-discovery",
@@ -192,6 +310,7 @@ def build(raw, run_at, config):
         "window": {"start": start.isoformat(), "end": end.isoformat(), "boundary": "left_closed_right_open"},
         "selection": {
             "candidate_count": len(rows),
+            "focused_review_count": len(focused),
             "selected_count": len(selected),
             "verified_count": sum(row["verification_status"] == "verified" for row in selected),
             "minimum": int(config["selection"]["minimum"]),
@@ -203,9 +322,9 @@ def build(raw, run_at, config):
         "sources": [{"name": item["name"], "url": item["official_url"]} for item in selected],
         "risks": risks,
         "editorial": {
-            "title": f"AI 新发现：{len(selected)} 个值得留意的新坐标",
-            "summary": f"整理 {len(selected)} 个近期 AI 模型、产品或应用，重点看用途、门槛和风险。",
-            "overview": [item["recommendation"] for item in selected[:5]],
+            "title": f"AI 新发现：{selected_name} 能帮谁少绕路？",
+            "summary": f"本期聚焦 {selected_name}，依据公开资料核验用途、门槛、价格、大陆可用性和风险边界。",
+            "overview": [item["recommendation"] for item in selected[:1]],
         },
     }
 
@@ -219,12 +338,16 @@ def validate_package(payload):
     for field in ("package_id", "run_at", "status", "window", "selection", "items", "candidates", "sources", "risks"):
         if field not in payload:
             errors.append(f"缺少 {field}")
+    if len(payload.get("items") or []) > 1:
+        errors.append("AI 新发现每期只能入选一个重点对象")
     for item in payload.get("items", []):
         for field in REQUIRED_ITEM_FIELDS:
             if field not in item:
                 errors.append(f"{item.get('name', '未命名')} 缺少 {field}")
+        if item.get("verification_grade") not in PUBLISHABLE_GRADES:
+            errors.append(f"{item.get('name', '未命名')} 核验等级不可发布")
     forbidden = json.dumps(payload, ensure_ascii=False)
-    for token in ("wechat_html", "微信版.html", "合并封面.png"):
+    for token in ("wechat_html", "微信版html", "合并封面.png"):
         if token in forbidden:
             errors.append(f"研究层包含平台输出字段 {token}")
     return errors

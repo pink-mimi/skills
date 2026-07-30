@@ -640,10 +640,192 @@ def build_github_v2_article(payload: dict):
     return "\n".join(lines), title, summary
 
 
+def text_list(value, fallback=None) -> list[str]:
+    if isinstance(value, list):
+        rows = [str(item).strip() for item in value if str(item).strip()]
+    elif isinstance(value, str) and value.strip():
+        rows = [item.strip() for item in re.split(r"[;；\n]+", value) if item.strip()]
+    else:
+        rows = []
+    return rows or list(fallback or [])
+
+
+def availability_text(item: dict) -> str:
+    availability = item.get("mainland_availability") or {}
+    if isinstance(availability, dict):
+        status = availability.get("status") or "待核验"
+        notes = availability.get("notes") or ""
+        extras = []
+        if availability.get("requires_special_network"):
+            extras.append("可能需要特殊网络条件")
+        if availability.get("requires_overseas_phone"):
+            extras.append("可能需要海外手机号")
+        if availability.get("requires_overseas_card"):
+            extras.append("可能需要海外支付卡")
+        tail = "；".join([part for part in [notes, *extras] if part])
+        return f"{status}；{tail}" if tail else str(status)
+    return str(availability or item.get("requirements") or "待核验")
+
+
+def pricing_text(item: dict) -> str:
+    details = item.get("pricing_details") or {}
+    if not isinstance(details, dict):
+        return str(item.get("pricing") or "待核验")
+    parts = [
+        details.get("free") or "",
+        details.get("free_quota") or "",
+        details.get("lowest_paid_price") or "",
+        details.get("subscription") or "",
+        details.get("auto_renewal") or "",
+    ]
+    paid_only = text_list(details.get("paid_only_features"))
+    if paid_only:
+        parts.append("付费功能：" + "、".join(paid_only))
+    if details.get("verified_at"):
+        parts.append(f"价格核验时间：{details.get('verified_at')}")
+    return "；".join(str(part).strip() for part in parts if str(part).strip()) or str(item.get("pricing") or "待核验")
+
+
+def verification_text(item: dict) -> str:
+    grade = item.get("verification_grade") or "待分级"
+    status = item.get("verification_status") or "unverified"
+    feedback = text_list(item.get("public_feedback"))
+    if grade == "A":
+        return f"A 级：官方资料完整，并有公开反馈可参考；状态 {status}"
+    if grade == "B":
+        return f"B 级：主要依据官方资料，公开反馈仍有限；状态 {status}"
+    return f"{grade} 级：资料仍需人工复核；状态 {status}"
+
+
+def source_lines(item: dict) -> list[str]:
+    sources = item.get("official_sources") or []
+    if not sources and item.get("official_url"):
+        sources = [{"name": "官方地址", "url": item.get("official_url")}]
+    lines = []
+    for index, source in enumerate(sources, 1):
+        name = source.get("name") or f"资料来源 {index}"
+        url = source.get("url") or item.get("official_url") or ""
+        verified_at = source.get("verified_at") or "未记录核验时间"
+        lines.append(f"{index}. [{name}]({url})\n   核验时间：{verified_at}")
+    return lines
+
+
+def build_ai_discovery_article(payload: dict):
+    item = (payload.get("items") or [{}])[0]
+    editorial = payload.get("editorial") or {}
+    name = item.get("name") or "本期 AI 新发现"
+    title = editorial.get("title") or f"AI 新发现：{name} 能帮谁少绕路？"
+    audience = text_list(item.get("audience"), ["对 AI 工具有实际需求的读者"])
+    not_for = text_list(item.get("not_for"), ["暂时没有相关场景的读者"])
+    scenarios = text_list(item.get("scenarios"), ["资料整理", "流程拆解", "重复任务辅助"])[:3]
+    risks = text_list(item.get("risks"), ["发布前继续复核隐私、费用、版权和可用地区"])
+    privacy = text_list(item.get("privacy_and_rights"), risks)
+    feedback = text_list(item.get("public_feedback"), ["公开反馈有限，本文主要依据官方资料整理"])
+    has_test_evidence = bool(item.get("tested") and (item.get("experience_notes") or item.get("test_notes") or item.get("evidence")))
+    if has_test_evidence:
+        test_boundary = "已有可追溯的试用记录，但本文仍按资料核验口径写作，发布前请人工复核。"
+    elif item.get("tested"):
+        test_boundary = "内容包标记为已测试，但未提供可追溯的实测记录；正文只按公开资料整理，不写亲身体验。"
+    else:
+        test_boundary = "未做亲身体验；本文依据公开资料整理，未进行完整实测，以下只写资料核验和可试用路径。"
+    lines = [
+        f"# {title}",
+        "",
+        "有些 AI 工具看起来像“又一个发布页”，真正需要判断的是：它能不能帮普通人少走一点具体的弯路。本期只看一个对象，不做榜单，也不把官方宣传写成实际体验。",
+        "",
+        f"> {test_boundary}",
+        "",
+        "## 30 秒速览",
+        "",
+        f"- 本期发现：{name}",
+        f"- 它是什么：{item.get('use_case') or '一个待核验的 AI 工具或模型'}",
+        f"- 适合谁：{'、'.join(audience[:3])}",
+        f"- 主要用途：{item.get('recommendation') or item.get('use_case') or '发布前继续核验'}",
+        f"- 使用门槛：{item.get('requirements') or '待核验'}",
+        f"- 国内可用性：{availability_text(item)}",
+        f"- 价格：{pricing_text(item)}",
+        f"- 核验状态：{verification_text(item)}",
+        "",
+        f"![{name} 使用场景示意图](images/AI发现-01.png)",
+        "",
+        "## 一、它解决什么问题",
+        "",
+        item.get("use_case") or "这个条目的用途仍需补充官方资料后再判断。",
+        "",
+        "它值得被单独拿出来看，是因为它不是只给技术圈看的新鲜名词，而是尝试把 AI 能力放进一个更具体的任务里。",
+        "",
+        "## 二、它具体能做什么",
+        "",
+        f"{name} 目前公开资料显示的核心能力，是围绕“{item.get('use_case') or '待核验用途'}”展开。它更像一个可试用路径，而不是一个可以直接下结论的成品体验。",
+        "",
+        "## 三、三个普通人能理解的使用场景",
+        "",
+    ]
+    lines += [f"- {scenario}" for scenario in scenarios]
+    lines += [
+        "",
+        "## 四、谁适合用，谁暂时不需要",
+        "",
+        f"适合：{'、'.join(audience)}。",
+        "",
+        f"暂时不需要：{'、'.join(not_for)}。",
+        "",
+        "## 五、注册、地区、语言和设备门槛",
+        "",
+        f"平台：{'、'.join(text_list(item.get('platforms'), ['待核验']))}。中文支持：{item.get('supports_chinese') or '待核验'}。",
+        "",
+        f"大陆可用性：{availability_text(item)}",
+        "",
+        f"开始使用前需要注意：{item.get('requirements') or '注册、账号地区、设备要求和 API 条件仍需人工核验。'}",
+        "",
+        "## 六、免费额度和付费价格",
+        "",
+        pricing_text(item),
+        "",
+        "价格、免费额度、自动续费和地区币种都可能变化，发布前请重新打开官方价格页确认。",
+        "",
+        "## 七、目前的限制与风险",
+        "",
+    ]
+    lines += [f"- {risk}" for risk in risks]
+    lines += [
+        "",
+        "隐私与版权边界：",
+        "",
+        *[f"- {entry}" for entry in privacy],
+        "",
+        "## 八、值不值得关注",
+        "",
+        f"如果你的工作里已经出现了类似场景，{name} 值得加入待试用清单；如果只是被发布声量吸引，可以先收藏官方文档，等价格、地区和稳定性信息更清楚后再决定。",
+        "",
+        f"本期推荐理由：{item.get('recommendation') or '用途明确，但仍需人工复核后再发布。'}",
+        "",
+        "公开反馈摘录口径：",
+        "",
+        *[f"- {entry}" for entry in feedback],
+        "",
+        "## 九、官方地址和资料来源",
+        "",
+        *source_lines(item),
+        "",
+        "---",
+        "",
+        "## 最后留一个路标",
+        "",
+        "AI 新发现不负责制造焦虑，只负责把“听起来很厉害”的东西放回现实问题里：谁能用、怎么开始、要花多少钱、风险在哪里。发布前请继续人工核验官方链接和价格地区信息。",
+        "",
+        "![结尾图](images/结尾图.png)",
+    ]
+    summary = editorial.get("summary") or f"本期聚焦 {name}，依据公开资料核验用途、门槛、价格和风险边界。"
+    return "\n".join(lines), title, summary
+
+
 def build_article(payload: dict):
     items = payload["items"]
     if payload["content_type"] == "github-hot" and int(payload.get("schema_version", 1)) == 2:
         return build_github_v2_article(payload)
+    if payload["content_type"] == "ai-discovery":
+        return build_ai_discovery_article(payload)
     if payload["content_type"] == "ai-discovery":
         editorial = payload.get("editorial") or {}
         title = editorial.get("title") or f"AI 新发现：{len(items)} 个值得留意的新坐标"
