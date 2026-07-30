@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "timezone": "Asia/Shanghai",
+  "window": {
+    "duration_days": 14
+  },
+  "discovery": {
+    "candidate_minimum": 8,
+    "candidate_maximum": 12
+  },
+  "selection": {
+    "minimum": 1,
+    "maximum": 1,
+    "target": 1,
+    "focused_review_target": 3,
+    "verified_minimum": 1
+  },
+  "sources": [
+    "official_blog",
+    "product_page",
+    "documentation",
+    "paper_page",
+    "huggingface",
+    "github",
+    "technical_media",
+    "community_discussion"
+  ]
+}

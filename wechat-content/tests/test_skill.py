@@ -135,11 +135,11 @@ class WechatContentTests(unittest.TestCase):
 
     def test_both_column_templates(self):
         with tempfile.TemporaryDirectory() as temp:
-            for fixture in ("daily-news-content-package.json","github-hot-content-package.json"):
+            for fixture in ("daily-news-content-package.json","github-hot-content-package.json","ai-discovery-content-package.json"):
                 result=subprocess.run([sys.executable,str(SKILL/"scripts/run.py"),"all","--input",str(SKILL/"tests/fixtures"/fixture),"--output-root",temp],capture_output=True,text=True)
                 self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-            self.assertEqual(len(list(Path(temp).glob("wechat/*/*/微信版.html"))),2)
-            self.assertEqual(len(list(Path(temp).glob("wechat/*/*/images/合并封面.png"))),2)
+            self.assertEqual(len(list(Path(temp).glob("wechat/*/*/微信版.html"))),3)
+            self.assertEqual(len(list(Path(temp).glob("wechat/*/*/images/合并封面.png"))),3)
     def test_rejects_unknown_schema(self):
         bad=SKILL/"tests/fixtures/unknown-schema.json"
         with tempfile.TemporaryDirectory() as temp:
@@ -255,6 +255,44 @@ class WechatContentTests(unittest.TestCase):
             self.assertNotIn("weekday",manifest.get("visual_variant","").lower())
             self.assertIn("开源坐标",page)
             self.assertNotIn("昨日新闻",page)
+
+    def test_ai_discovery_renders_reviewable_wechat_package(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = self.build("ai-discovery-content-package.json", temp)
+            page = (out / "微信版.html").read_text(encoding="utf-8")
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(out.parent.name, "ai-discovery")
+            self.assertIn('id="copy-wechat"', page)
+            self.assertIn('id="wechat-content"', page)
+            self.assertIn("AI 新发现审核台", page)
+            self.assertIn("本期发现：Atlas Agent Studio", article)
+            self.assertIn("一、它解决什么问题", article)
+            self.assertIn("三、三个普通人能理解的使用场景", article)
+            self.assertIn("五、注册、地区、语言和设备门槛", article)
+            self.assertIn("九、官方地址和资料来源", article)
+            self.assertNotIn("## 02｜", article)
+            self.assertIn("未做亲身体验", article)
+            self.assertNotIn("我试了", article)
+            self.assertTrue((out / "images/合并封面.png").exists())
+            self.assertTrue((out / "images/横版封面.png").exists())
+            self.assertTrue((out / "images/方形封面.png").exists())
+            self.assertTrue((out / "images/AI发现-01.png").exists())
+            self.assertEqual(manifest["content_template"], "ai-discovery")
+            self.assertTrue(manifest["copy_allowed"])
+            self.assertFalse(manifest["publish_ready"])
+
+    def test_ai_discovery_does_not_claim_testing_without_evidence(self):
+        payload = json.loads((SKILL / "tests/fixtures/ai-discovery-content-package.json").read_text(encoding="utf-8"))
+        payload["items"][0]["tested"] = True
+        payload["items"][0]["evidence"] = []
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "ai-no-test-evidence.json"
+            source.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            out = self.build(source, temp)
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            self.assertIn("未提供可追溯的实测记录", article)
+            self.assertNotIn("已记录实际试用信息", article)
 
     def github_v2_fixture(self):
         return json.loads(
