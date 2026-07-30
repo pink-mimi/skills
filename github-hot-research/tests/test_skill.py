@@ -1,4 +1,5 @@
 import importlib.util
+import http.client
 import json
 import subprocess
 import sys
@@ -16,6 +17,14 @@ RUN = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(RUN)
 CONFIG = json.loads((SKILL / "assets/default-config.json").read_text(encoding="utf-8"))
 RUN_AT = datetime.fromisoformat("2026-07-26T09:00:00+08:00")
+
+
+class PartialResponse:
+    def __init__(self, partial):
+        self.partial = partial
+
+    def read(self):
+        raise http.client.IncompleteRead(self.partial)
 
 
 def candidate(index, *, ai=False, category=None, weekly_stars=500, license_status="verified"):
@@ -110,6 +119,96 @@ def raw_candidates(count=18):
 
 
 class GithubHotResearchTests(unittest.TestCase):
+    def test_fetch_text_uses_partial_html_when_github_trending_read_is_incomplete(self):
+        html = b"""
+        <article class="Box-row">
+          <h2><a href="/ayghri/i-have-adhd"> ayghri / i-have-adhd </a></h2>
+          <p>This skill helps your coding agent avoid hiding answers.</p>
+          <span itemprop="programmingLanguage">Python</span>
+          <a href="/ayghri/i-have-adhd/stargazers">13,058</a>
+          <a href="/ayghri/i-have-adhd/forks">679</a>
+          <span>6,150 stars this week</span>
+        </article>
+        """
+
+        text = RUN.fetch_text(
+            object(),
+            timeout=20,
+            opener=lambda request, timeout: PartialResponse(html),
+        )
+
+        rows = RUN.parse_trending_weekly_html(text, RUN_AT)
+        self.assertEqual(rows[0]["repo"], "ayghri/i-have-adhd")
+        self.assertEqual(rows[0]["description"], "This skill helps your coding agent avoid hiding answers.")
+
+    def test_trending_parser_ignores_star_button_text_before_repository_heading(self):
+        html = """
+        <article class="Box-row">
+          <div class="float-right d-flex">
+            <a href="/login?return_to=%2Fayghri%2Fi-have-adhd"><span>Star</span></a>
+            <svg><path d="M8 .25"></path></svg>
+          </div>
+          <h2 class="h3 lh-condensed">
+            <a href="/ayghri/i-have-adhd">
+              <span class="text-normal">ayghri /</span>
+              i-have-adhd
+            </a>
+          </h2>
+          <p class="col-9 color-fg-muted my-1 tmp-pr-4">
+            A skill for your coding agent to stop it from burying the answer. ADHD-friendly output.
+          </p>
+          <span itemprop="programmingLanguage">Python</span>
+          <a href="/ayghri/i-have-adhd/stargazers"><svg><path d="M8 .25 673 418"></path></svg>13,145</a>
+          <a href="/ayghri/i-have-adhd/forks"><svg><path d="M5 5.372 878"></path></svg>684</a>
+          <span>6,156 stars this week</span>
+        </article>
+        """
+
+        rows = RUN.parse_trending_weekly_html(html, RUN_AT)
+
+        self.assertEqual(rows[0]["repo"], "ayghri/i-have-adhd")
+        self.assertEqual(
+            rows[0]["description"],
+            "A skill for your coding agent to stop it from burying the answer. ADHD-friendly output.",
+        )
+        self.assertNotIn("Star", rows[0]["description"])
+        self.assertEqual(rows[0]["reader_card"]["metrics"]["stars"], 13145)
+        self.assertEqual(rows[0]["reader_card"]["metrics"]["forks"], 684)
+
+    def test_trending_parser_builds_specific_reader_card_from_description(self):
+        html = """
+        <article class="Box-row">
+          <h2><a href="/ayghri/i-have-adhd"> ayghri / i-have-adhd </a></h2>
+          <p class="col-9 color-fg-muted my-1 tmp-pr-4">
+            A skill for your coding agent to stop it from burying the answer. ADHD-friendly output.
+          </p>
+          <span itemprop="programmingLanguage">Python</span>
+          <a href="/ayghri/i-have-adhd/stargazers">13,145</a>
+          <a href="/ayghri/i-have-adhd/forks">684</a>
+          <span>6,156 stars this week</span>
+        </article>
+        """
+
+        rows = RUN.parse_trending_weekly_html(html, RUN_AT)
+        card = rows[0]["reader_card"]
+
+        self.assertEqual(card["category_label"], "AI 编码辅助")
+        self.assertEqual(card["translated_description"], "一个帮助编码智能体不要把答案藏起来的技能，输出方式对 ADHD 用户更友好。")
+        self.assertIn("编码助手", card["recommendation"])
+        self.assertEqual(len(card["highlights"]), 3)
+        self.assertNotEqual(card["recommendation"], "本周进入 GitHub Trending，适合先收藏并按需试用。")
+
+    def test_translate_description_covers_current_weekly_project_descriptions(self):
+        examples = {
+            "A hive mind communication platform": "群体智能协作通信平台。",
+            "The fastest browser for AI agents to run browser automation, built for sharing your logged-in browser state with your AI agents, like Codex or Claude Code, without disturbing you. Zero cost, zero config.": "面向 AI 智能体运行浏览器自动化的高速浏览器，可把已登录的浏览器状态安全分享给 Codex 或 Claude Code 等智能体，同时不打扰你的正常使用，零成本、零配置。",
+            "Kronos: A Foundation Model for the Language of Financial Markets": "Kronos 是面向金融市场语言的基础模型。",
+            "Open-source & free — Battle-tested at Alibaba's scale. Hybrid architecture code review tool: deterministic pipelines + LLM Agent, precise line-level comments, built-in fine-tuned ruleset (NPE, thread-safety, XSS, SQL injection), OpenAI & Anthropic compatible.": "开源免费的混合架构代码审查工具，经过阿里巴巴规模场景验证，结合确定性流水线与 LLM Agent，支持精准行级评论、内置调优规则集，并兼容 OpenAI 与 Anthropic。",
+        }
+        for source, expected in examples.items():
+            with self.subTest(source=source):
+                self.assertEqual(RUN.translate_description(source), expected)
+
     def build(self, raw=None, config=None, output_root=None):
         return RUN.build(
             raw or raw_candidates(),
@@ -174,6 +273,9 @@ class GithubHotResearchTests(unittest.TestCase):
         self.assertEqual(first["reader_card"]["metrics"]["forks"], 901)
         self.assertEqual(first["reader_card"]["metrics"]["weekly_stars"], 101)
         self.assertEqual(first["trending"]["url"], "https://github.com/trending?since=weekly")
+        self.assertEqual(first["reader_card"]["original_description"], "Repository 1 description")
+        self.assertTrue(first["reader_card"]["translated_description"])
+        self.assertNotEqual(first["reader_card"]["translated_description"], first["reader_card"]["recommendation"])
 
     def test_build_preserves_trending_top_ten_order_without_score_reranking(self):
         raw = {
@@ -214,6 +316,41 @@ class GithubHotResearchTests(unittest.TestCase):
         self.assertTrue(all(visual["usage_status"] == "approved" for visual in approved))
         external = next(visual for visual in visuals if visual["url"] == "https://example.com/screenshot.png")
         self.assertEqual(external["usage_status"], "review_required")
+
+    def test_enrich_preserves_trending_row_and_still_extracts_readme_images_when_repo_api_fails(self):
+        html = """
+        <article class="Box-row">
+          <h2><a href="/koala73/worldmonitor"> koala73 / worldmonitor </a></h2>
+          <p>Real-time global intelligence dashboard.</p>
+          <span itemprop="programmingLanguage">TypeScript</span>
+          <a href="/koala73/worldmonitor/stargazers">73,564</a>
+          <a href="/koala73/worldmonitor/forks">11,030</a>
+          <span>11,342 stars this week</span>
+        </article>
+        """
+        readme = """
+        # worldmonitor
+        ![World monitor dashboard](docs/world-monitor-dashboard.png)
+        """
+        rows = RUN.parse_trending_weekly_html(html, RUN_AT)
+        enriched = RUN.enrich_trending_rows(
+            rows,
+            RUN_AT,
+            api_json=lambda path: (_ for _ in ()).throw(RuntimeError("api unavailable")),
+            api_readme=lambda repo: readme,
+        )
+        self.assertEqual(enriched[0]["repo"], "koala73/worldmonitor")
+        self.assertEqual(enriched[0]["official_url"], "https://github.com/koala73/worldmonitor")
+        self.assertEqual(enriched[0]["trending"]["rank"], 1)
+        self.assertEqual(enriched[0]["reader_card"]["metrics"]["weekly_stars"], 11342)
+        visuals = enriched[0]["visual_candidates"]
+        self.assertEqual(visuals[0]["url"], "https://raw.githubusercontent.com/koala73/worldmonitor/main/docs/world-monitor-dashboard.png")
+        self.assertEqual(visuals[0]["usage_status"], "review_required")
+        self.assertEqual(
+            enriched[0]["reader_card"]["original_description"],
+            "Real-time global intelligence dashboard.",
+        )
+        self.assertIn("实时", enriched[0]["reader_card"]["translated_description"])
 
     def test_fewer_than_eight_selected_is_needs_review(self):
         package = self.build(raw_candidates(7))

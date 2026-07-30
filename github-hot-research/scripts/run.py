@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import http.client
 import html
 import json
 import re
@@ -38,6 +39,14 @@ def save(path, value):
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def fetch_text(request, timeout=20, opener=urllib.request.urlopen):
+    try:
+        data = opener(request, timeout=timeout).read()
+    except http.client.IncompleteRead as exc:
+        data = exc.partial or b""
+    return data.decode("utf-8", "replace")
+
+
 def window(run_at, config):
     end = run_at.astimezone(BJT)
     return end - timedelta(days=int(config["window"]["duration_days"])), end
@@ -49,7 +58,7 @@ def collect(run_at):
         headers={"User-Agent": "github-hot-research/2.0"},
     )
     try:
-        page = urllib.request.urlopen(request, timeout=20).read().decode("utf-8", "replace")
+        page = fetch_text(request, timeout=20)
     except Exception as exc:
         return {"meta": {"rate_limited": True, "error": str(exc)}, "items": []}
     trending_rows = parse_trending_weekly_html(page, run_at)
@@ -80,104 +89,6 @@ def collect(run_at):
             return ""
         return ""
 
-    def enrich(row):
-        repo = row["repo"]
-        official_url = row.get("official_url") or f"https://github.com/{repo}"
-        try:
-            data = api_json(f"/repos/{repo}")
-        except Exception:
-            return row
-        license_info = data.get("license") or {}
-        license_status = "verified" if license_info.get("spdx_id") and license_info.get("spdx_id") != "NOASSERTION" else "not_found"
-        metrics = row["reader_card"]["metrics"]
-        language = metrics.get("language") or data.get("language") or ""
-        weekly = metrics.get("weekly_stars")
-        description = row.get("description") or data.get("description") or f"{repo} 是本周进入 GitHub Trending 的开源项目。"
-        category_label = "AI 项目" if re.search(r"\b(ai|agent|llm|model)\b", description, re.I) else "开源项目"
-        readme_text = api_readme(repo)
-        license_record_value = {
-            "status": license_status,
-            "name": license_info.get("name") or "",
-            "spdx_id": license_info.get("spdx_id") or "",
-            "url": f"{official_url}/blob/main/LICENSE",
-        }
-        row.update({
-            "repo": repo,
-            "official_url": data.get("html_url") or official_url,
-            "homepage_url": data.get("homepage") or "",
-            "created_at": data.get("created_at"),
-            "category": "ai-automation" if category_label == "AI 项目" else "developer-tools",
-            "description": description,
-            "reader_card": {
-                "category_label": category_label,
-                "name": data.get("name") or repo.split("/")[-1],
-                "summary": description,
-                "recommendation": row["reader_card"].get("recommendation") or "本周进入 GitHub Trending，适合先收藏并按需试用。",
-                "highlights": row["reader_card"].get("highlights") or ["进入本周 GitHub Trending", "官方仓库资料可追溯", "适合按 README 继续了解"],
-                "audience": ["开发者", "开源项目观察者"],
-                "difficulty": {
-                    "level": "medium",
-                    "label": "中等",
-                    "note": "以官方 README 的安装说明为准",
-                },
-                "metrics": {
-                    "language": language,
-                    "stars": metrics.get("stars") if metrics.get("stars") is not None else data.get("stargazers_count"),
-                    "weekly_stars": weekly,
-                    "forks": metrics.get("forks") if metrics.get("forks") is not None else data.get("forks_count"),
-                    "verified_at": run_at.isoformat(),
-                },
-                "reader_warning": "",
-            },
-            "verification": {
-                "readme": {"url": f"{official_url}#readme", "verified_at": run_at.isoformat()},
-                "license": {
-                    **license_record_value,
-                },
-                "maintenance": {
-                    "status": "active" if data.get("pushed_at") else "unknown",
-                    "last_commit_at": data.get("pushed_at") or "",
-                    "latest_release_at": "",
-                    "evidence_urls": [f"{official_url}/commits"],
-                },
-                "requirements": {
-                    "platforms": ["GitHub"],
-                    "install": "以官方 README 的安装说明为准",
-                    "command_line": True,
-                    "programming_required": True,
-                    "account_required": False,
-                    "api_key_required": False,
-                    "paid_dependency": False,
-                    "special_hardware": False,
-                },
-                "risks": [],
-                "evidence": [official_url, f"{official_url}#readme"],
-            },
-            "visual_candidates": extract_readme_visual_candidates(
-                readme_text,
-                repo=repo,
-                source_page=f"{official_url}#readme",
-                license_info=license_record_value,
-                verified_at=run_at.isoformat(),
-            ),
-            "image2_brief": {
-                "subject": description,
-                "scene": "开源项目工作流与代码协作的抽象场景",
-                "must_include": row["reader_card"].get("highlights")[:2] or ["进入本周 GitHub Trending", "官方仓库资料可追溯"],
-                "must_avoid": ["项目Logo", "虚构软件界面", "中文文字", "虚构数据"],
-            },
-            "heat_evidence": [{
-                "kind": "github_trending",
-                "observed_at": run_at.isoformat(),
-                "url": official_url,
-                "summary": "项目进入 GitHub Trending weekly 榜单。",
-            }],
-            "hot_reason": "项目进入 GitHub Trending weekly 榜单，本周获得明显社区关注。",
-            "use_case": description,
-            "editorial_summary": description,
-            "ai_related": category_label == "AI 项目",
-        })
-        return row
     return {
         "meta": {
             "rate_limited": False,
@@ -185,8 +96,133 @@ def collect(run_at):
             "source": "github_trending_weekly",
             "source_url": TRENDING_WEEKLY_URL,
         },
-        "items": [enrich(row) for row in trending_rows],
+        "items": enrich_trending_rows(trending_rows, run_at, api_json=api_json, api_readme=api_readme),
     }
+
+
+def enrich_trending_rows(rows, run_at, api_json, api_readme):
+    return [
+        enrich_trending_row(row, run_at, api_json=api_json, api_readme=api_readme)
+        for row in rows
+    ]
+
+
+def enrich_trending_row(row, run_at, api_json, api_readme):
+    row = deepcopy(row)
+    repo = row["repo"]
+    official_url = row.get("official_url") or f"https://github.com/{repo}"
+    try:
+        data = api_json(f"/repos/{repo}") or {}
+    except Exception:
+        data = {}
+    license_info = data.get("license") or {}
+    existing_license = clean_text(row.get("license"))
+    api_spdx = clean_text(license_info.get("spdx_id"))
+    license_status = (
+        "verified"
+        if api_spdx and api_spdx != "NOASSERTION"
+        else ("not_found" if existing_license.upper() in LICENSE_UNKNOWN else "verified")
+    )
+    metrics = row.get("reader_card", {}).get("metrics", {})
+    language = metrics.get("language") or data.get("language") or ""
+    weekly = metrics.get("weekly_stars")
+    description = row.get("description") or data.get("description") or f"{repo} 是本周进入 GitHub Trending 的开源项目。"
+    original_description = clean_text(row.get("original_description") or description)
+    translated_description = clean_text(row.get("translated_description") or translate_description(original_description))
+    category_label = "AI 项目" if re.search(r"\b(ai|agent|llm|model)\b", description, re.I) else "开源项目"
+    try:
+        readme_text = api_readme(repo)
+    except Exception:
+        readme_text = ""
+    official_url = data.get("html_url") or official_url
+    license_record_value = {
+        "status": license_status,
+        "name": license_info.get("name") or ("" if license_status == "not_found" else existing_license),
+        "spdx_id": api_spdx or ("" if license_status == "not_found" else existing_license),
+        "url": f"{official_url}/blob/main/LICENSE",
+    }
+    existing_card = row.get("reader_card") or {}
+    row.update({
+        "repo": repo,
+        "official_url": official_url,
+        "homepage_url": data.get("homepage") or row.get("homepage_url") or "",
+        "created_at": data.get("created_at") or row.get("created_at"),
+        "category": "ai-automation" if category_label == "AI 项目" else row.get("category") or "developer-tools",
+        "description": description,
+        "original_description": original_description,
+        "translated_description": translated_description,
+        "reader_card": {
+            "category_label": existing_card.get("category_label") or category_label,
+            "name": data.get("name") or existing_card.get("name") or repo.split("/")[-1],
+            "summary": existing_card.get("summary") or translated_description or description,
+            "original_description": existing_card.get("original_description") or original_description,
+            "translated_description": existing_card.get("translated_description") or translated_description,
+            "recommendation": existing_card.get("recommendation") or "本周进入 GitHub Trending，适合先收藏并按需试用。",
+            "highlights": existing_card.get("highlights") or ["进入本周 GitHub Trending", "官方仓库资料可追溯", "适合按 README 继续了解"],
+            "audience": existing_card.get("audience") or ["开发者", "开源项目观察者"],
+            "difficulty": existing_card.get("difficulty") or {
+                "level": "medium",
+                "label": "中等",
+                "note": "以官方 README 的安装说明为准",
+            },
+            "metrics": {
+                "language": language,
+                "stars": metrics.get("stars") if metrics.get("stars") is not None else data.get("stargazers_count"),
+                "weekly_stars": weekly,
+                "forks": metrics.get("forks") if metrics.get("forks") is not None else data.get("forks_count"),
+                "verified_at": metrics.get("verified_at") or run_at.isoformat(),
+            },
+            "reader_warning": existing_card.get("reader_warning") or "",
+        },
+        "verification": {
+            "readme": {"url": f"{official_url}#readme", "verified_at": run_at.isoformat()},
+            "license": {
+                **license_record_value,
+            },
+            "maintenance": {
+                "status": "active" if data.get("pushed_at") else "unknown",
+                "last_commit_at": data.get("pushed_at") or "",
+                "latest_release_at": "",
+                "evidence_urls": [f"{official_url}/commits"],
+            },
+            "requirements": {
+                "platforms": ["GitHub"],
+                "install": "以官方 README 的安装说明为准",
+                "command_line": True,
+                "programming_required": True,
+                "account_required": False,
+                "api_key_required": False,
+                "paid_dependency": False,
+                "special_hardware": False,
+            },
+            "risks": [],
+            "evidence": [official_url, f"{official_url}#readme"],
+        },
+        "visual_candidates": extract_readme_visual_candidates(
+            readme_text,
+            repo=repo,
+            source_page=f"{official_url}#readme",
+            license_info=license_record_value,
+            verified_at=run_at.isoformat(),
+        ) or row.get("visual_candidates") or [],
+        "image2_brief": {
+            "subject": description,
+            "scene": "开源项目工作流与代码协作的抽象场景",
+            "must_include": (existing_card.get("highlights") or ["进入本周 GitHub Trending", "官方仓库资料可追溯"])[:2],
+            "must_avoid": ["项目Logo", "虚构软件界面", "中文文字", "虚构数据"],
+        },
+        "heat_evidence": [{
+            "kind": "github_trending",
+            "observed_at": run_at.isoformat(),
+            "url": official_url,
+            "summary": "项目进入 GitHub Trending weekly 榜单。",
+        }],
+        "hot_reason": "项目进入 GitHub Trending weekly 榜单，本周获得明显社区关注。",
+        "use_case": description,
+        "editorial_summary": description,
+        "ai_related": category_label == "AI 项目",
+    })
+    return row
 
 
 def number_from_text(value):
@@ -198,6 +234,205 @@ def strip_tags(value):
     return html.unescape(re.sub(r"<[^>]+>", " ", value)).strip()
 
 
+def contains_cjk(value):
+    return bool(re.search(r"[\u4e00-\u9fff]", clean_text(value)))
+
+
+def translate_description(value):
+    text = clean_text(value)
+    if not text or contains_cjk(text):
+        return text
+    lower = text.lower()
+    if lower == "a hive mind communication platform":
+        return "群体智能协作通信平台。"
+    if "fastest browser for ai agents to run browser automation" in lower:
+        return "面向 AI 智能体运行浏览器自动化的高速浏览器，可把已登录的浏览器状态安全分享给 Codex 或 Claude Code 等智能体，同时不打扰你的正常使用，零成本、零配置。"
+    if "foundation model for the language of financial markets" in lower:
+        return "Kronos 是面向金融市场语言的基础模型。"
+    if "battle-tested at alibaba" in lower and "hybrid architecture code review tool" in lower:
+        return "开源免费的混合架构代码审查工具，经过阿里巴巴规模场景验证，结合确定性流水线与 LLM Agent，支持精准行级评论、内置调优规则集，并兼容 OpenAI 与 Anthropic。"
+    if "real-time global intelligence dashboard" in lower:
+        return "实时全球情报看板。通过 AI 进行新闻聚合、地缘政治监测以及基础设施追踪，把信息集中到统一界面中，方便用户掌握事件情况。"
+    if "stop it from burying the answer" in lower and "adhd-friendly output" in lower:
+        return "一个帮助编码智能体不要把答案藏起来的技能，输出方式对 ADHD 用户更友好。"
+    if "smart, flexible" in lower and "route optimization" in lower:
+        return "智能、灵活且高度可定制的开源路线优化应用。"
+    if "free mit ai gateway" in lower or "one endpoint, 290+ providers" in lower:
+        return "免费的 MIT 许可 AI 网关，用一个端点连接数百个模型和服务提供商，并支持 Claude Code、Codex、Cursor 等工具链。"
+    if "self-hosted deployment platform" in lower:
+        return "自托管部署平台。"
+    if "skills for real engineers" in lower:
+        return "面向真实工程工作的技能集合，直接来自作者的 .agents 目录。"
+    if "tree-of-thought with pruning" in lower:
+        return "面向编码智能体的 ADHD 技能，基于 Claude 与 Codex Agent SDK 实现带剪枝的思维树流程。"
+    if "web ui for the pi coding agent" in lower:
+        return "Pi 编码智能体的 Web 用户界面。"
+    if "turns commodity wifi signals into real-time spatial intelligence" in lower:
+        return "把普通 WiFi 信号转化为实时空间智能、生命体征监测和存在检测能力，全程不需要视频画面。"
+    if "ai agent toolkit" in lower and "unified llm api" in lower:
+        return "AI 智能体工具包，包含统一 LLM API、智能体循环、终端界面和编码智能体命令行工具。"
+    if "coding skills and prompts" in lower:
+        return "一组面向 AI 辅助开发工作流的聚焦编码技能和提示词。"
+    if "shipping and fulfillment workflows" in lower:
+        return "面向发货与履约工作流的开源解决方案。"
+    replacements = (
+        ("open-source", "开源"),
+        ("open source", "开源"),
+        ("real-time", "实时"),
+        ("dashboard", "看板"),
+        ("developer", "开发者"),
+        ("developers", "开发者"),
+        ("workflow", "工作流"),
+        ("workflows", "工作流"),
+        ("tool", "工具"),
+        ("tools", "工具"),
+        ("application", "应用"),
+        ("applications", "应用"),
+        ("ai-powered", "AI 驱动"),
+        ("news aggregation", "新闻聚合"),
+        ("monitoring", "监测"),
+        ("tracking", "追踪"),
+        ("customizable", "可定制"),
+        ("flexible", "灵活"),
+    )
+    translated = text
+    for source, target in replacements:
+        translated = re.sub(source, target, translated, flags=re.I)
+    if translated != text and contains_cjk(translated):
+        return translated
+    return f"官方描述：{text}"
+
+
+def infer_reader_profile(repo, description):
+    text = f"{repo} {description}".lower()
+    if "block/buzz" in text or "hive mind" in text:
+        return {
+            "category": "collaboration",
+            "category_label": "协作通信",
+            "recommendation": "它把“群体智能”放进通信平台里，适合观察多人协作和多 Agent 协同会往哪里走。",
+            "highlights": ["面向群体智能协作", "强调沟通与协同组织", "适合观察多人/多 Agent 工作流"],
+            "audience": ["协作工具开发者", "Agent 产品观察者", "开源项目研究者"],
+        }
+    if "ego-lite" in text or "browser automation" in text:
+        return {
+            "category": "ai-browser",
+            "category_label": "Agent 浏览器",
+            "recommendation": "它解决的是 AI 智能体接管浏览器自动化时的登录态共享和打扰问题，方向很实用。",
+            "highlights": ["面向 AI Agent 浏览器自动化", "支持共享已登录浏览器状态", "强调零成本、零配置和低打扰"],
+            "audience": ["Agent 工具开发者", "Codex/Claude Code 用户", "自动化工作流使用者"],
+        }
+    if "kronos" in text and "financial markets" in text:
+        return {
+            "category": "finance-ai",
+            "category_label": "金融基础模型",
+            "recommendation": "它把金融市场数据当成一种“语言”来建模，适合关注 AI 金融基础设施的人继续跟踪。",
+            "highlights": ["面向金融市场数据建模", "以基础模型方式处理市场语言", "适合观察垂直领域模型落地"],
+            "audience": ["量化研究者", "金融科技开发者", "垂直模型观察者"],
+        }
+    if "open-code-review" in text or "code review tool" in text:
+        return {
+            "category": "code-review",
+            "category_label": "代码审查工具",
+            "recommendation": "它把确定性规则和 LLM Agent 放在同一套代码审查流程里，适合团队评估自动 Review 的边界。",
+            "highlights": ["结合规则流水线与 LLM Agent", "支持精准行级评论", "内置常见风险规则集"],
+            "audience": ["研发团队", "代码质量负责人", "AI 工程化实践者"],
+        }
+    if "worldmonitor" in text or "intelligence dashboard" in text or "geopolitical" in text:
+        return {
+            "category": "ai-intelligence",
+            "category_label": "AI 与情报看板",
+            "recommendation": "如果你关注新闻、地缘事件或 OSINT 工作流，它像是一张可以继续深挖的实时观察地图。",
+            "highlights": ["AI 辅助聚合新闻与事件线索", "把监测信息集中到统一界面", "适合观察态势感知类产品"],
+            "audience": ["OSINT 观察者", "新闻研究者", "数据看板开发者"],
+        }
+    if "adhd" in text and ("coding agent" in text or "agent sdk" in text):
+        return {
+            "category": "ai-coding",
+            "category_label": "AI 编码辅助",
+            "recommendation": "它把编码助手的输出方式往前调了一步：少绕弯，先把答案亮出来。",
+            "highlights": ["面向编码助手的输出习惯优化", "强调 ADHD 友好的信息呈现", "适合调教 Agent 工作流"],
+            "audience": ["AI 编程用户", "Agent 工作流使用者", "关注 ADHD 友好输出的人"],
+        }
+    if "ai agent" in text and ("book" in text or "pdf" in text or "工程实践" in text):
+        return {
+            "category": "ai-learning",
+            "category_label": "AI Agent 学习",
+            "recommendation": "如果你想从会调用模型走到能设计 Agent 系统，它是值得系统收藏的学习资料。",
+            "highlights": ["覆盖 AI Agent 原理与工程实践", "提供正文、PDF 和配套代码", "适合按章节持续学习"],
+            "audience": ["AI Agent 学习者", "开发者", "技术写作者"],
+        }
+    if "gateway" in text or "models" in text or "claude code" in text or "codex" in text:
+        return {
+            "category": "ai-infra",
+            "category_label": "AI 开发基础设施",
+            "recommendation": "它适合想把多模型调用、额度和工具链统一管理的人继续研究。",
+            "highlights": ["统一多模型和多服务提供商入口", "支持主流 AI 编码工具", "强调额度感知和自动回退"],
+            "audience": ["AI 应用开发者", "Agent 工具用户", "基础设施维护者"],
+        }
+    if "deployment" in text or "shipping" in text or "fulfillment" in text:
+        return {
+            "category": "developer-tools",
+            "category_label": "部署与履约工具",
+            "recommendation": "它指向一个很实际的问题：把部署、发货或履约流程尽量放回自己可控的系统里。",
+            "highlights": ["面向自托管部署或履约场景", "适合评估开源替代方案", "更关注业务流程落地"],
+            "audience": ["独立开发者", "电商工具开发者", "自托管用户"],
+        }
+    if "skills" in text or ".agents" in text or "prompts" in text:
+        return {
+            "category": "ai-coding",
+            "category_label": "AI 编程技能",
+            "recommendation": "它更像一份可抄作业的 Agent 技能目录，适合拿来改造自己的编码工作流。",
+            "highlights": ["整理可复用的 Agent 技能", "直接来自实际工程工作流", "适合按场景拆分提示和流程"],
+            "audience": ["AI 编程用户", "提示词维护者", "工程团队"],
+        }
+    if "wifi" in text or "spatial intelligence" in text or "vital sign" in text:
+        return {
+            "category": "systems-data",
+            "category_label": "空间感知",
+            "recommendation": "它把普通 WiFi 信号变成空间感知线索，是值得观察的硬核技术项目。",
+            "highlights": ["利用 WiFi 信号进行空间感知", "关注生命体征和存在检测", "不依赖视频画面"],
+            "audience": ["物联网开发者", "信号处理研究者", "智能空间产品团队"],
+        }
+    if "pi" in text and ("agent" in text or "web ui" in text):
+        return {
+            "category": "ai-coding",
+            "category_label": "AI Agent 工具",
+            "recommendation": "它适合观察轻量 Agent 工具如何把模型接口、循环和命令行体验串起来。",
+            "highlights": ["围绕 Pi 编码 Agent 展开", "覆盖 Web UI 或命令行体验", "适合源码阅读和对照试用"],
+            "audience": ["Agent 工具开发者", "前端学习者", "开源观察者"],
+        }
+    return {
+        "category": "developer-tools",
+        "category_label": "开源项目",
+        "recommendation": "项目用途明确，可以先按 README 判断是否值得收藏或试用。",
+        "highlights": ["进入本周 GitHub Trending", "官方仓库资料可追溯", "适合按 README 继续了解"],
+        "audience": ["开发者", "开源项目观察者"],
+    }
+
+
+def trending_reader_card(repo, description, translated_description, language, stars, weekly_stars, forks, run_at):
+    profile = infer_reader_profile(repo, description)
+    return {
+        "category_label": profile["category_label"],
+        "name": repo.split("/")[-1],
+        "summary": translated_description or description,
+        "original_description": description,
+        "translated_description": translated_description,
+        "recommendation": profile["recommendation"],
+        "highlights": profile["highlights"],
+        "audience": profile["audience"],
+        "difficulty": {"level": "medium", "label": "中等", "note": "以官方 README 为准"},
+        "metrics": {
+            "language": language,
+            "stars": stars,
+            "weekly_stars": weekly_stars,
+            "forks": forks,
+            "verified_at": run_at.isoformat(),
+        },
+        "reader_warning": "",
+    }
+
+
 def parse_trending_weekly_html(page, run_at):
     rows = []
     for article in re.findall(r"<article[\s\S]*?</article>", page):
@@ -207,7 +442,11 @@ def parse_trending_weekly_html(page, run_at):
         repo = re.sub(r"\s", "", html.unescape(match.group(1)))
         if any(row["repo"] == repo for row in rows):
             continue
-        description_match = re.search(r"<p[^>]*>([\s\S]*?)</p>", article)
+        description_area = article[match.end():]
+        description_match = re.search(
+            r"<p\b[^>]*\bcolor-fg-muted\b[^>]*>([\s\S]*?)</p>",
+            description_area,
+        ) or re.search(r"<p\b[^>]*>([\s\S]*?)</p>", description_area)
         description = strip_tags(description_match.group(1)) if description_match else f"{repo} 是本周进入 GitHub Trending 的开源项目。"
         language_match = re.search(r'itemprop="programmingLanguage"[^>]*>([\s\S]*?)</span>', article)
         language = strip_tags(language_match.group(1)) if language_match else ""
@@ -216,28 +455,22 @@ def parse_trending_weekly_html(page, run_at):
         weekly_match = re.search(r"([\d,]+)\s+stars\s+this\s+week", article, re.I)
         rank = len(rows) + 1
         official_url = f"https://github.com/{repo}"
+        translated_description = translate_description(description)
+        stars = number_from_text(strip_tags(star_match.group(1))) if star_match else None
+        weekly_stars = number_from_text(weekly_match.group(1)) if weekly_match else None
+        forks = number_from_text(strip_tags(fork_match.group(1))) if fork_match else None
+        reader_card = trending_reader_card(
+            repo, description, translated_description, language, stars, weekly_stars, forks, run_at
+        )
+        profile = infer_reader_profile(repo, description)
         rows.append({
             "repo": repo,
             "official_url": official_url,
             "description": description,
-            "category": "developer-tools",
-            "reader_card": {
-                "category_label": "开源项目",
-                "name": repo.split("/")[-1],
-                "summary": description,
-                "recommendation": "本周进入 GitHub Trending，适合先收藏并按需试用。",
-                "highlights": ["进入本周 GitHub Trending", "官方仓库资料可追溯", "适合按 README 继续了解"],
-                "audience": ["开发者", "开源项目观察者"],
-                "difficulty": {"level": "medium", "label": "中等", "note": "以官方 README 为准"},
-                "metrics": {
-                    "language": language,
-                    "stars": number_from_text(star_match.group(1)) if star_match else None,
-                    "weekly_stars": number_from_text(weekly_match.group(1)) if weekly_match else None,
-                    "forks": number_from_text(fork_match.group(1)) if fork_match else None,
-                    "verified_at": run_at.isoformat(),
-                },
-                "reader_warning": "",
-            },
+            "original_description": description,
+            "translated_description": translated_description,
+            "category": profile["category"],
+            "reader_card": reader_card,
             "trending": {
                 "rank": rank,
                 "period": "weekly",
@@ -360,10 +593,18 @@ def normalize_reader_card(row):
     difficulty.setdefault("level", "medium")
     difficulty.setdefault("label", "中等")
     difficulty.setdefault("note", clean_text(row.get("install")))
+    original_description = clean_text(
+        existing.get("original_description") or row.get("original_description") or row.get("description")
+    )
+    translated_description = clean_text(
+        existing.get("translated_description") or row.get("translated_description") or translate_description(original_description)
+    )
     return {
         "category_label": clean_text(existing.get("category_label") or row.get("category")),
         "name": clean_text(existing.get("name") or clean_text(row.get("repo")).split("/")[-1]),
-        "summary": clean_text(existing.get("summary") or row.get("description")),
+        "summary": clean_text(existing.get("summary") or translated_description or row.get("description")),
+        "original_description": original_description,
+        "translated_description": translated_description,
         "recommendation": clean_text(existing.get("recommendation") or "用途明确，官方资料可追溯。"),
         "highlights": highlights,
         "audience": audience,

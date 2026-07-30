@@ -37,6 +37,10 @@ def payload_five(theme=True):
         item["category"] = category if theme else f"route-{index}"
         item["reader_card"]["name"] = f"project-{index}"
         item["reader_card"]["category_label"] = "AI Agent" if index <= 3 else "开发工具"
+        item["reader_card"]["original_description"] = "Original project description from GitHub."
+        item["reader_card"]["translated_description"] = "来自 GitHub 的官方项目描述。"
+        item["reader_card"]["summary"] = "编辑概况：这个项目适合观察自动化流程。"
+        item["reader_card"]["recommendation"] = "一句话推荐：它把复杂工具变成更容易试用的流程。"
         item["reader_card"]["metrics"]["weekly_stars"] = 1800 - index * 100
         item["heat"] = {
             "eligible": True,
@@ -102,6 +106,19 @@ def payload_ten():
     return payload
 
 
+def payload_realistic_routes():
+    payload = payload_ten()
+    labels = ["AI 与情报看板", "开发者资源", "AI Agent 学习", "路线优化", "电商与履约"]
+    for index, item in enumerate(payload["items"]):
+        item["reader_card"]["category_label"] = labels[index % len(labels)]
+    payload["editorial"]["editorial_angles"] = [
+        "一个把新闻聚合、地缘监测和基础设施追踪放在同一界面的实时态势看板。",
+        "面向 ADHD 开发者和创作者的工具、方法与资源清单。",
+        "一本系统讲解 AI Agent 设计原理和工程实践的开源书。",
+    ]
+    return payload
+
+
 class GithubHotColumnTests(unittest.TestCase):
     def test_theme_is_selected_from_content_and_is_repeatable(self):
         payload = payload_five()
@@ -123,12 +140,12 @@ class GithubHotColumnTests(unittest.TestCase):
         self.assertNotEqual(title, "本周 GitHub 热门：5 个值得关注的开源项目")
         self.assertIn(payload["editorial"]["theme_evidence"][0]["repo"], article)
         self.assertEqual(article.count("<!-- github-project:start -->"), 5)
-        self.assertIn("最后留一个坐标", article)
+        self.assertIn("如果只收藏三个", article)
 
     def test_weekly_github_template_renders_exactly_ten_ranked_projects(self):
         article, title, summary = COLUMN.build_article(payload_ten())
         self.assertEqual(title, "本周 GitHub 热门：10 个正在变火的开源项目")
-        self.assertIn("从 GitHub 周榜前 10 个项目看", article)
+        self.assertIn("按 GitHub 周榜顺序整理", article)
         self.assertEqual(article.count("<!-- github-project:start -->"), 10)
         self.assertIn("## 01 · project-01", article)
         self.assertIn("## 10 · project-10", article)
@@ -154,6 +171,27 @@ class GithubHotColumnTests(unittest.TestCase):
         self.assertNotIn("**为什么这周火？**", article)
         self.assertNotIn("**上手条件：**", article)
 
+    def test_description_uses_github_translated_description_not_editorial_summary(self):
+        article, _, _ = COLUMN.build_article(payload_five())
+        self.assertIn("**描述：** 来自 GitHub 的官方项目描述。", article)
+        self.assertIn("> **一句话概况**　一句话推荐：它把复杂工具变成更容易试用的流程。", article)
+        self.assertNotIn("**描述：** Original project description from GitHub.", article)
+        self.assertNotIn("**描述：** 编辑概况：这个项目适合观察自动化流程。", article)
+
+    def test_description_uses_faithful_chinese_translation_instead_of_original_or_recommendation(self):
+        payload = payload_five()
+        payload["items"][0]["reader_card"]["original_description"] = (
+            "A curated list of ADHD-specific tools, apps, strategies, and resources for developers and makers."
+        )
+        payload["items"][0]["reader_card"]["translated_description"] = "ADHD 相关工具、应用、方法和资源清单，面向开发者和创作者整理。"
+        article, _, _ = COLUMN.build_article(payload)
+        self.assertIn(
+            "**描述：** ADHD 相关工具、应用、方法和资源清单，面向开发者和创作者整理。",
+            article,
+        )
+        self.assertNotIn("**描述：** A curated list of ADHD-specific tools", article)
+        self.assertNotIn("**描述：** 一句话推荐", article)
+
     def test_project_address_shows_full_github_url(self):
         article, _, _ = COLUMN.build_article(payload_five())
         self.assertIn(
@@ -172,8 +210,59 @@ class GithubHotColumnTests(unittest.TestCase):
 
     def test_missing_common_theme_uses_multiple_routes_copy(self):
         article, _, _ = COLUMN.build_article(payload_five(theme=False))
-        self.assertIn("几条不同路线", article)
+        self.assertIn("GitHub 热榜有点分裂", article)
         self.assertNotIn("共同趋势是", article)
+
+    def test_github_hot_reader_copy_has_no_template_or_audit_language(self):
+        article, _, _ = COLUMN.build_article(payload_ten())
+        forbidden = (
+            "不写成冷冰冰",
+            "只保留读者",
+            "机械采集",
+            "采集过程",
+            "审核过程",
+            "模板",
+            "生成",
+            "官方描述、数据、亮点、适合谁和项目地址",
+        )
+        for phrase in forbidden:
+            self.assertNotIn(phrase, article)
+
+    def test_multiple_routes_opening_is_specific_and_reader_facing(self):
+        article, _, _ = COLUMN.build_article(payload_ten())
+        self.assertIn("GitHub 热榜有点分裂", article)
+        self.assertIn("AI 工具", article)
+        self.assertIn("开发者工具", article)
+        self.assertIn("你不一定都要试", article)
+        self.assertIn("马上试用的工具", article)
+        self.assertIn("系统学习的资料", article)
+        self.assertIn("当前工作最接近", article)
+
+    def test_opening_uses_short_route_labels_instead_of_long_project_descriptions(self):
+        article, _, _ = COLUMN.build_article(payload_realistic_routes())
+        self.assertIn("AI 与情报看板", article)
+        self.assertIn("开发者资源", article)
+        self.assertIn("AI Agent 学习", article)
+        self.assertNotIn("一个把新闻聚合、地缘监测和基础设施追踪放在同一界面的实时态势看板。；", article)
+
+    def test_closing_gives_specific_collection_choices(self):
+        article, _, _ = COLUMN.build_article(payload_ten())
+        self.assertIn("如果只收藏三个", article)
+        self.assertIn("马上试用", article)
+        self.assertIn("系统学习", article)
+        self.assertIn("当前工作最接近", article)
+        self.assertNotIn("没有一条可以概括所有项目的主线", article)
+        self.assertNotIn("资料型项目，试用工具型项目", article)
+
+    def test_closing_uses_issue_level_observation_not_first_project_pitch(self):
+        payload = payload_realistic_routes()
+        payload["editorial"]["closing_observations"] = [
+            "如果你关注新闻、地缘事件或 OSINT 工作流，它像是一张可以继续深挖的实时观察地图。"
+        ]
+        article, _, _ = COLUMN.build_article(payload)
+        closing = article.split("<!-- github-closing:start -->", 1)[1]
+        self.assertIn("这期更像一组分岔路", closing)
+        self.assertNotIn("实时观察地图", closing)
 
     def test_external_audit_contains_theme_rejections_and_verification(self):
         payload = payload_five()
@@ -208,7 +297,7 @@ class GithubHotColumnTests(unittest.TestCase):
         )
         self.assertNotIn(default_opening, article)
         self.assertNotIn(default_closing, article)
-        self.assertIn("本周突然升温", article)
+        self.assertIn("换个角度看", article)
 
 
 if __name__ == "__main__":

@@ -27,6 +27,8 @@
 每项包含：
 
 - `reader_card`：栏目标签、名称、摘要、一句话推荐、3 个亮点、受众、难度、指标和面向读者的提醒。
+- `reader_card.original_description`：GitHub Trending 或仓库官方原始描述，保持来源原文。
+- `reader_card.translated_description`：面向中文读者的忠实描述翻译或轻微润色，只回答“项目官方说它是什么”，不得写成推荐语、适合谁或编辑观点。
 - `verification`：README、许可证、维护、使用条件、分级风险和证据链接。
 - `visual_candidates`：图片类型、原始地址、来源页、alt 文本、是否 repo 内图片、是否真实界面、许可证、使用状态和核验时间。
 - `image2_brief`：只依据已核验用途生成；必须规避 Logo、虚构软件界面、文字和虚构数据。
