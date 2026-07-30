@@ -54,6 +54,24 @@ class AiDiscoveryResearchTests(unittest.TestCase):
         self.assertIn("缺少官方来源", affected["rejection_reasons"])
         self.assertEqual(package["status"], "needs_review")
 
+    def test_verified_candidate_requires_source_verified_at(self):
+        raw = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        raw["items"][0]["official_sources"][0]["verified_at"] = ""
+        raw["items"][0]["verification_status"] = "verified"
+        package = self.build(raw)
+        affected = next(item for item in package["candidates"] if item["name"] == "Atlas Agent Studio")
+        self.assertIn("官方来源缺少核验时间", affected["rejection_reasons"])
+        self.assertEqual(package["status"], "needs_review")
+
+    def test_claimed_real_test_requires_evidence(self):
+        raw = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        raw["items"][0]["tested"] = True
+        raw["items"][0]["evidence"] = []
+        package = self.build(raw)
+        affected = next(item for item in package["candidates"] if item["name"] == "Atlas Agent Studio")
+        self.assertIn("实测声明缺少证据记录", affected["rejection_reasons"])
+        self.assertEqual(package["status"], "needs_review")
+
     def test_research_layer_does_not_generate_wechat_outputs(self):
         package = self.build()
         blob = json.dumps(package, ensure_ascii=False)

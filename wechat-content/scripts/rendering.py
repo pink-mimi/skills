@@ -663,7 +663,13 @@ def build_article(payload: dict):
             risks = "；".join(item.get("risks") or ["发布前继续核验官方说明"])
             sources = item.get("official_sources") or []
             source = sources[0] if sources else {"name": "官方来源", "url": item.get("official_url", "")}
-            tested_line = "未做亲身体验，以下为公开资料核验和可试用路径整理。" if not item.get("tested") else "已记录实际试用信息，但发布前仍需人工复核。"
+            has_test_evidence = bool(item.get("tested") and (item.get("experience_notes") or item.get("test_notes") or item.get("evidence")))
+            if has_test_evidence:
+                tested_line = "已记录可追溯的实际试用信息，但发布前仍需人工复核。"
+            elif item.get("tested"):
+                tested_line = "标记为已测试，但未提供可追溯的实测记录；正文仅按公开资料整理。"
+            else:
+                tested_line = "未做亲身体验，以下为公开资料核验和可试用路径整理。"
             lines += [
                 "",
                 "---",

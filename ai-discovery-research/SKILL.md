@@ -15,6 +15,8 @@ description: Use when 用户需要搜索、核验和筛选 AI 模型、产品、
 2. 运行 `collect`，或用 `--input` 载入离线候选。候选来源可以包括官方博客、发布页、文档、论文页、Hugging Face、GitHub、主流技术媒体和社区讨论。
 3. 确定性事实必须回到官方来源核验：模型/产品主页、官方文档、论文页、GitHub README、Hugging Face model card 或发布公告。
 4. 对每条候选补齐名称、类型、链接、发布时间或发现时间、官方来源、用途、适合谁、费用/限制、使用门槛、风险、核验状态和推荐理由。
+   - `verified` 或 `partial` 条目必须至少有一个官方来源记录 `verified_at`。
+   - 只有存在 `experience_notes`、`test_notes` 或 `evidence` 记录时，才能把 `tested` 视为可追溯实测。
 5. 运行 `build` 生成 `outputs/ai-discovery/YYYY-MM-DD/content-package.json`。
 6. 运行 `verify`。只有状态为 `ready_for_human_review` 的内容包才适合交给 `wechat-content` 制作公众号审核包。
 
@@ -35,4 +37,4 @@ python scripts/run.py all --input tests/fixtures/candidates.json --run-at 2026-0
 
 - 本 Skill 不写公众号成稿、HTML 或封面。
 - 资料不足、官方来源缺失、费用/隐私/版权风险不清楚时，输出 `needs_review`。
-- 不编造亲身体验；没有实际测试时只能写资料核验和可试用路径。
+- 不编造亲身体验；没有可追溯实测记录时只能写资料核验和可试用路径。

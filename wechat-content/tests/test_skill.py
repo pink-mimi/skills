@@ -276,6 +276,18 @@ class WechatContentTests(unittest.TestCase):
             self.assertTrue(manifest["copy_allowed"])
             self.assertFalse(manifest["publish_ready"])
 
+    def test_ai_discovery_does_not_claim_testing_without_evidence(self):
+        payload = json.loads((SKILL / "tests/fixtures/ai-discovery-content-package.json").read_text(encoding="utf-8"))
+        payload["items"][0]["tested"] = True
+        payload["items"][0]["evidence"] = []
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "ai-no-test-evidence.json"
+            source.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            out = self.build(source, temp)
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            self.assertIn("未提供可追溯的实测记录", article)
+            self.assertNotIn("已记录实际试用信息", article)
+
     def github_v2_fixture(self):
         return json.loads(
             (SKILL / "tests/fixtures/github-hot-content-package-v2.json").read_text(encoding="utf-8")

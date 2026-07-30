@@ -141,10 +141,16 @@ def rejection_reasons(row):
             reasons.append(f"缺少 {field}")
     if not any(clean_text(source.get("url")) for source in row.get("official_sources") or []):
         reasons.append("官方来源缺少链接")
+    if row.get("verification_status") in {"verified", "partial"} and not any(
+        clean_text(source.get("verified_at")) for source in row.get("official_sources") or []
+    ):
+        reasons.append("官方来源缺少核验时间")
     if row.get("verification_status") not in {"verified", "partial"}:
         reasons.append("尚未完成官方来源核验")
     if "待核验" in f"{row.get('pricing')} {row.get('requirements')}":
         reasons.append("费用或使用门槛待核验")
+    if row.get("tested") and not row.get("evidence"):
+        reasons.append("实测声明缺少证据记录")
     return list(dict.fromkeys(reasons))
 
 
