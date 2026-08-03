@@ -138,14 +138,16 @@ class GithubHotColumnTests(unittest.TestCase):
         payload = payload_five()
         article, title, _ = COLUMN.build_article(payload)
         self.assertNotEqual(title, "本周 GitHub 热门：5 个值得关注的开源项目")
-        self.assertIn(payload["editorial"]["theme_evidence"][0]["repo"], article)
+        opening = article.split("<!-- github-opening:start -->", 1)[1].split("<!-- github-opening:end -->", 1)[0]
+        self.assertIn("开发者压力清单", opening)
+        self.assertNotIn(payload["editorial"]["theme_evidence"][0]["repo"], opening)
         self.assertEqual(article.count("<!-- github-project:start -->"), 5)
-        self.assertIn("如果只收藏三个", article)
+        self.assertIn("热榜会刷新，问题不会", article)
 
     def test_weekly_github_template_renders_exactly_ten_ranked_projects(self):
         article, title, summary = COLUMN.build_article(payload_ten())
         self.assertEqual(title, "本周 GitHub 热门：10 个正在变火的开源项目")
-        self.assertIn("按 GitHub 周榜顺序整理", article)
+        self.assertNotIn("按 GitHub 周榜顺序整理", article)
         self.assertEqual(article.count("<!-- github-project:start -->"), 10)
         self.assertIn("## 01 · project-01", article)
         self.assertIn("## 10 · project-10", article)
@@ -210,7 +212,7 @@ class GithubHotColumnTests(unittest.TestCase):
 
     def test_missing_common_theme_uses_multiple_routes_copy(self):
         article, _, _ = COLUMN.build_article(payload_five(theme=False))
-        self.assertIn("GitHub 热榜有点分裂", article)
+        self.assertIn("开发者压力清单", article)
         self.assertNotIn("共同趋势是", article)
 
     def test_github_hot_reader_copy_has_no_template_or_audit_language(self):
@@ -224,27 +226,40 @@ class GithubHotColumnTests(unittest.TestCase):
             "模板",
             "生成",
             "官方描述、数据、亮点、适合谁和项目地址",
+            "按 GitHub 周榜顺序整理",
+            "先看官方描述",
+            "这篇更像一张筛选清单",
         )
         for phrase in forbidden:
             self.assertNotIn(phrase, article)
 
     def test_multiple_routes_opening_is_specific_and_reader_facing(self):
         article, _, _ = COLUMN.build_article(payload_ten())
-        self.assertIn("GitHub 热榜有点分裂", article)
+        opening = article.split("<!-- github-opening:start -->", 1)[1].split("<!-- github-opening:end -->", 1)[0]
+        self.assertIn("开发者压力清单", opening)
         self.assertIn("AI 工具", article)
         self.assertIn("开发者工具", article)
-        self.assertIn("你不一定都要试", article)
-        self.assertIn("马上试用的工具", article)
-        self.assertIn("系统学习的资料", article)
-        self.assertIn("当前工作最接近", article)
+        self.assertIn("今晚能试", article)
+        self.assertIn("系统补课", article)
+        self.assertIn("当前工作", article)
+
+    def test_route_phrase_deprioritizes_generic_open_source_label(self):
+        payload = payload_realistic_routes()
+        payload["items"][0]["reader_card"]["category_label"] = "开源项目"
+
+        phrase = COLUMN.route_phrase(payload)
+
+        self.assertTrue(phrase.startswith("开发者资源、AI Agent 学习"))
+        self.assertNotIn("开源项目、开发者资源", phrase)
 
     def test_opening_avoids_flat_report_language(self):
         article, _, _ = COLUMN.build_article(payload_ten())
         opening = article.split("<!-- github-opening:start -->", 1)[1].split("<!-- github-opening:end -->", 1)[0]
-        self.assertIn("本周开源雷达", opening)
-        self.assertIn("先看它解决什么问题", opening)
+        self.assertIn("Star 把它们推到眼前", opening)
+        self.assertIn("替开发者省掉哪一段麻烦", opening)
         self.assertNotIn("这期留下", opening)
         self.assertNotIn("数字让项目被看见", opening)
+        self.assertNotIn("怎么筛选", opening)
 
     def test_opening_uses_short_route_labels_instead_of_long_project_descriptions(self):
         article, _, _ = COLUMN.build_article(payload_realistic_routes())
@@ -260,11 +275,12 @@ class GithubHotColumnTests(unittest.TestCase):
         payload["editorial"]["theme_evidence"] = [{"repo": item["repo"]} for item in payload["items"][:3]]
         article, _, _ = COLUMN.build_article(payload)
         opening = article.split("<!-- github-opening:start -->", 1)[1].split("<!-- github-opening:end -->", 1)[0]
-        self.assertIn("几条不同路线", opening)
+        self.assertIn("开发者压力清单", opening)
         self.assertIn("AI 与情报看板", opening)
         self.assertIn("开发者资源", opening)
         self.assertIn("AI Agent 学习", opening)
         self.assertNotIn("同一个问题：AI 与情报看板", opening)
+        self.assertNotIn("example/project", opening)
 
     def test_all_opening_variants_avoid_old_flat_report_phrases(self):
         payload = payload_realistic_routes()
@@ -274,18 +290,23 @@ class GithubHotColumnTests(unittest.TestCase):
 
         openings = ["\n".join(value) for value in COLUMN.build_opening_variants(payload)]
         for opening in openings:
-            self.assertIn("几条", opening)
+            self.assertTrue("路线" in opening or "坐标" in opening or "工作流" in opening)
             self.assertNotIn("同一条路线", opening)
             self.assertNotIn("都在尝试", opening)
             self.assertNotIn("这期留下", opening)
             self.assertNotIn("数字让项目被看见", opening)
+            self.assertNotIn("按 GitHub 周榜顺序整理", opening)
+            self.assertNotIn("先看官方描述", opening)
 
     def test_closing_gives_specific_collection_choices(self):
         article, _, _ = COLUMN.build_article(payload_ten())
-        self.assertIn("如果只收藏三个", article)
+        closing = article.split("<!-- github-closing:start -->", 1)[1]
+        self.assertIn("热榜会刷新，问题不会", closing)
         self.assertIn("马上试用", article)
-        self.assertIn("系统学习", article)
+        self.assertIn("系统补课", article)
         self.assertIn("当前工作最接近", article)
+        self.assertNotIn("- 先挑一个", closing)
+        self.assertNotIn("- 再留一个", closing)
         self.assertNotIn("没有一条可以概括所有项目的主线", article)
         self.assertNotIn("资料型项目，试用工具型项目", article)
 
@@ -296,7 +317,8 @@ class GithubHotColumnTests(unittest.TestCase):
         ]
         article, _, _ = COLUMN.build_article(payload)
         closing = article.split("<!-- github-closing:start -->", 1)[1]
-        self.assertIn("这期更像一组分岔路", closing)
+        self.assertIn("共同变化", closing)
+        self.assertIn("AI 与情报看板", closing)
         self.assertNotIn("实时观察地图", closing)
 
     def test_closing_never_uses_english_project_description_as_reflection(self):
@@ -307,7 +329,7 @@ class GithubHotColumnTests(unittest.TestCase):
         article, _, _ = COLUMN.build_article(payload)
         closing = article.split("<!-- github-closing:start -->", 1)[1]
         self.assertNotIn("A hive mind communication platform", closing)
-        self.assertIn("真正值得留下来的", closing)
+        self.assertIn("真正有用的项目", closing)
 
     def test_approved_visual_candidate_is_used_without_external_project_dir(self):
         payload = payload_ten()
@@ -378,7 +400,7 @@ class GithubHotColumnTests(unittest.TestCase):
         )
         self.assertNotIn(default_opening, article)
         self.assertNotIn(default_closing, article)
-        self.assertIn("换个角度看", article)
+        self.assertIn("本周开源雷达", article)
 
 
 if __name__ == "__main__":
