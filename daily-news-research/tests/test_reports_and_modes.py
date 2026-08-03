@@ -29,6 +29,8 @@ class ReportsAndModesTests(unittest.TestCase):
             self.assertIn("机构多样性",report)
             self.assertIn("官方原文覆盖率",report)
             self.assertIn("时间窗口诊断",report)
+            self.assertIn("窗口模式",report)
+            self.assertIn("候选上限触顶",report)
 
     def test_rebuild_is_offline_and_does_not_claim_fresh_verification(self):
         with tempfile.TemporaryDirectory() as temp:

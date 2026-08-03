@@ -27,8 +27,12 @@ def _parse_time(value):
 
 def _collection_window(config,run_at):
     hour,minute=map(int,config.get("window",{}).get("end_time","06:00").split(":"))
-    end=run_at.replace(hour=hour,minute=minute,second=0,microsecond=0)
-    return end-timedelta(hours=int(config.get("window",{}).get("duration_hours",24))),end
+    anchor=run_at.replace(hour=hour,minute=minute,second=0,microsecond=0)
+    if run_at<anchor:
+        anchor-=timedelta(days=1)
+    mode=str(config.get("window",{}).get("mode") or "morning").lower()
+    end=run_at if mode=="rolling" else anchor
+    return anchor-timedelta(hours=int(config.get("window",{}).get("duration_hours",24))),end
 
 
 def _time_bucket(row,start,end):
@@ -284,11 +288,15 @@ def collect_sources(config,run_at,fetcher=None,categories=None):
         for future in as_completed(futures): results.append(future.result())
     results.sort(key=lambda row:row[0])
     items=[]; health=[]; source_rows=[]
+    rolling=str(config.get("window",{}).get("mode") or "morning").lower()=="rolling"
     for _,rows,state in results:
         health.append(state)
         buckets={name:[] for name in ("in_window","invalid_time","too_new","too_old")}
         for row in rows: buckets[_time_bucket(row,window_start,window_end)].append(row)
-        source_rows.append(buckets["in_window"]+buckets["invalid_time"]+buckets["too_new"]+buckets["too_old"])
+        if rolling:
+            source_rows.append(buckets["in_window"]+buckets["invalid_time"]+buckets["too_old"])
+        else:
+            source_rows.append(buckets["in_window"]+buckets["invalid_time"]+buckets["too_new"]+buckets["too_old"])
     position=0
     while len(items)<maximum:
         added=False
@@ -311,6 +319,7 @@ def collect_sources(config,run_at,fetcher=None,categories=None):
             "successful_organizations":len(organizations),"failed_sources":len(errors),
             "candidate_limit_reached":sum(row["candidate_count"] for row in health)>maximum,
             "time_window_counts":time_counts,
+            "window":{"start":window_start.isoformat(),"end":window_end.isoformat(),"mode":str(config.get("window",{}).get("mode") or "morning").lower()},
         },
         "items":items,"errors":errors,"source_health":health,
     }

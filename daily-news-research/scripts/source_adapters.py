@@ -34,6 +34,20 @@ def _base_item(source,title,url,published_at="",updated_at="",summary=""):
     }
 
 
+DATE_PATTERN=re.compile(r"(20\d{2})\s*[年./-]\s*(\d{1,2})\s*[月./-]\s*(\d{1,2})(?:\s*日)?(?:[ T]+(\d{1,2})(?::?(\d{2}))?)?",re.I)
+
+
+def _extract_date(value):
+    match=DATE_PATTERN.search(_clean(value))
+    if not match:
+        return ""
+    year,month,day,hour,minute=match.groups()
+    published=f"{year}-{int(month):02d}-{int(day):02d}"
+    if hour:
+        published+=f"T{int(hour):02d}:{int(minute or 0):02d}:00+08:00"
+    return published
+
+
 def _parse_feed(payload,source):
     try:
         root=ET.fromstring(payload)
@@ -59,24 +73,22 @@ def _parse_html(payload,source):
     if not re.search(r"<html|<body|<a\b",text,re.I):
         return ParseResult("parse_error",[],"响应不像可解析的 HTML 页面")
     rows=[]; seen=set()
-    pattern=re.compile(r'<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>([\s\S]*?)</a>(?=([\s\S]{0,1200}))',re.I)
-    for url,label,tail in pattern.findall(text):
+    pattern=re.compile(r'<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>([\s\S]*?)</a>',re.I)
+    for match in pattern.finditer(text):
+        url,label=match.group(1),match.group(2)
         title=_clean(label)
         if len(title)<8 or title in seen or url.lower().startswith(("javascript:","mailto:","#")):
             continue
-        match=re.search(r"(20\d{2})\s*[年./-]\s*(\d{1,2})\s*[月./-]\s*(\d{1,2})\s*日?(?:\s+(\d{1,2}):?(\d{2})?)?",_clean(tail))
-        if not match:
+        context=text[max(0,match.start()-800):min(len(text),match.end()+1200)]
+        published=_extract_date(context) or str(source.get("fallback_date") or "")
+        if not published:
             continue
-        year,month,day,hour,minute=match.groups()
-        published=f"{year}-{int(month):02d}-{int(day):02d}"
-        if hour:
-            published+=f"T{int(hour):02d}:{int(minute or 0):02d}:00+08:00"
         seen.add(title)
         rows.append(_base_item(source,title,url,published))
         if len(rows)>=50:
             break
     if rows: return ParseResult("success_with_items",rows,"")
-    article_links=sum(1 for _,label,_ in pattern.findall(text) if len(_clean(label))>=8)
+    article_links=sum(1 for item in pattern.finditer(text) if len(_clean(item.group(2)))>=8)
     if article_links: return ParseResult("parse_error",[],"发现文章链接，但未提取到可靠发布时间")
     recognized=bool(re.search(r"<ul\b|class=[\"'][^\"']*(?:list|news|content)",text,re.I))
     return ParseResult("success_no_items" if recognized else "parse_error",[],"" if recognized else "页面存在 HTML，但未识别到新闻列表结构")

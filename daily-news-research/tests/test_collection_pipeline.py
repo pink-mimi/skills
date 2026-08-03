@@ -50,6 +50,19 @@ class CollectionPipelineTests(unittest.TestCase):
         self.assertIn("https://www.chinanews.com.cn/scroll-news/2026/0722/news.shtml",requested)
         self.assertEqual(raw["meta"]["time_window_counts"]["in_window"],2)
 
+    def test_rolling_window_keeps_morning_anchor_and_extends_to_run_time(self):
+        items=(
+            "<item><title>Morning public service update</title><link>https://example.com/morning</link><pubDate>Wed, 22 Jul 2026 05:30:00 +0800</pubDate></item>"
+            "<item><title>Late morning platform safety update</title><link>https://example.com/late</link><pubDate>Wed, 22 Jul 2026 10:30:00 +0800</pubDate></item>"
+            "<item><title>Future policy update</title><link>https://example.com/future</link><pubDate>Wed, 22 Jul 2026 14:30:00 +0800</pubDate></item>"
+        )
+        source={"name":"source","organization":"org","url":"https://example.com/feed","parser":"rss_atom","category":"general","tier":2,"role":"discovery","daily_default":True,"enabled":True}
+        config={"window":{"end_time":"06:00","duration_hours":24,"mode":"rolling"},"collection":{"max_workers":1,"maximum_candidates":50},"sources":[source]}
+        raw=pipeline.collect_sources(config,datetime.fromisoformat("2026-07-22T12:00:00+08:00"),fetcher=lambda source:Result("success",f"<rss><channel>{items}</channel></rss>".encode()))
+        self.assertEqual([row["title"] for row in raw["items"]],["Morning public service update","Late morning platform safety update"])
+        self.assertEqual(raw["meta"]["window"]["start"],"2026-07-21T06:00:00+08:00")
+        self.assertEqual(raw["meta"]["window"]["end"],"2026-07-22T12:00:00+08:00")
+
     def test_collection_distinguishes_source_statuses_and_organizations(self):
         feed=b"<rss><channel><item><title>National public service update</title><link>https://example.com/a</link><pubDate>Tue, 21 Jul 2026 10:00:00 +0800</pubDate></item></channel></rss>"
         sources=[]

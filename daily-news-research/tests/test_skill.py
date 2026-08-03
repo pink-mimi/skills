@@ -97,8 +97,9 @@ class DailyNewsResearchTests(unittest.TestCase):
 
     def test_collection_and_selection_limits_are_explicit(self):
         config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
-        self.assertEqual(config["collection"]["maximum_candidates"],50)
-        self.assertEqual(config["verification"]["maximum_queue"],15)
+        self.assertEqual(config["collection"]["maximum_candidates"],150)
+        self.assertEqual(config["verification"]["minimum_queue"],24)
+        self.assertEqual(config["verification"]["maximum_queue"],30)
         self.assertGreaterEqual(config["health"]["minimum_successful_organizations"],5)
         self.assertEqual(config["selection"]["maximum_local"],1)
 

@@ -545,7 +545,7 @@ def resolve_article_title(editorial: dict, date_label: str, item_count: int) -> 
 
 
 DAILY_NEWS_V2_GROUPS = (
-    ("国内动态", {"politics", "society", "education", "legal", "public-safety", "general", "时政", "社会", "教育", "法治", "公共安全"}),
+    ("国内动态", {"politics", "society", "education", "legal", "public-safety", "public-interest", "general", "时政", "社会", "教育", "法治", "公共安全", "公共服务"}),
     ("财经与产业", {"finance", "market", "industry", "consumer", "财经", "市场", "产业", "消费"}),
     ("科技与未来", {"tech", "technology", "research", "ai", "科技", "科研", "AI"}),
     ("世界现场", {"world", "international", "国际"}),

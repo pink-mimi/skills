@@ -22,8 +22,13 @@ def write(path,value):
     path.write_text(value.rstrip()+"\n",encoding="utf-8")
 def window(run_at, config):
     hour, minute = map(int, config["window"]["end_time"].split(":"))
-    end = run_at.astimezone(BJT).replace(hour=hour, minute=minute, second=0, microsecond=0)
-    return end - timedelta(hours=int(config["window"]["duration_hours"])), end
+    current = run_at.astimezone(BJT)
+    anchor = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if current < anchor:
+        anchor -= timedelta(days=1)
+    mode = str(config.get("window", {}).get("mode") or "morning").lower()
+    end = current if mode == "rolling" else anchor
+    return anchor - timedelta(hours=int(config["window"]["duration_hours"])), end
 def parse_time(value):
     if not value: return None
     try:
@@ -102,7 +107,7 @@ def domestic_relevant(row):
     if row.get("domestic_relevance") is True: return True
     if row.get("domestic_relevance") is False: return False
     category=str(row.get("category") or "").strip().lower()
-    domestic_categories={"politics","finance","society","tech","technology","public-safety","culture","education","时政","财经","社会","科技","公共安全","文化","教育","民生"}
+    domestic_categories={"politics","finance","society","tech","technology","public-safety","public-interest","culture","education","时政","财经","社会","科技","公共安全","公共服务","文化","教育","民生"}
     if category in domestic_categories: return True
     text=" ".join(str(row.get(key) or "") for key in ("title","summary","source"))
     markers=("中国","国内","我国","北京","上海","天津","重庆","香港","澳门","台湾","国务院","国家统计局","水利部","应急管理部","教育部","工信部","国家卫健委","新华社","人民网","央视")
@@ -293,7 +298,8 @@ def tiered_report(raw,package,queue,excluded):
         if row.get("status") in research.SUCCESS_STATUSES: organizations.add(row.get("organization"))
     primary=sum(1 for row in package.get("items",[]) if row.get("primary_sources") or row.get("source_role")=="primary")
     time_counts=meta.get("time_window_counts",{})
-    lines=[source_report(raw,package),"","## 时间窗口诊断","",f"- 窗口内：{int(time_counts.get('in_window',0))} 条",f"- 晚于窗口：{int(time_counts.get('too_new',0))} 条",f"- 早于窗口：{int(time_counts.get('too_old',0))} 条",f"- 时间无效：{int(time_counts.get('invalid_time',0))} 条","","## 来源阶梯","",*[f"- 第 {tier} 阶梯：{count} 个配置来源" for tier,count in sorted(tier_counts.items(),key=lambda value:str(value[0]))],"","## 机构多样性","",f"- 成功机构：{int(meta.get('successful_organizations',len(organizations)))}",f"- 核验队列：{len(queue)} 个事件",f"- 排除记录：{len(excluded)} 条","","## 官方原文覆盖率","",f"- 入选新闻：{primary}/{len(package.get('items',[]))}（{primary/total:.1%}）"]
+    window_meta=meta.get("window") or {}
+    lines=[source_report(raw,package),"","## 时间窗口诊断","",f"- 窗口模式：{window_meta.get('mode','morning')}（{window_meta.get('start','未记录')} → {window_meta.get('end','未记录')}）",f"- 候选上限触顶：{'是' if meta.get('candidate_limit_reached') else '否'}",f"- 窗口内：{int(time_counts.get('in_window',0))} 条",f"- 晚于窗口：{int(time_counts.get('too_new',0))} 条",f"- 早于窗口：{int(time_counts.get('too_old',0))} 条",f"- 时间无效：{int(time_counts.get('invalid_time',0))} 条","","## 来源阶梯","",*[f"- 第 {tier} 阶梯：{count} 个配置来源" for tier,count in sorted(tier_counts.items(),key=lambda value:str(value[0]))],"","## 机构多样性","",f"- 成功机构：{int(meta.get('successful_organizations',len(organizations)))}",f"- 核验队列：{len(queue)} 个事件",f"- 排除记录：{len(excluded)} 条","","## 官方原文覆盖率","",f"- 入选新闻：{primary}/{len(package.get('items',[]))}（{primary/total:.1%}）"]
     return "\n".join(lines)
 
 def prepare_research(raw,run_at,config):

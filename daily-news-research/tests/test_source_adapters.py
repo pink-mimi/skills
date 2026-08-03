@@ -54,6 +54,20 @@ class SourceAdapterTests(unittest.TestCase):
         result=source_adapters.parse(payload,source)
         self.assertEqual(result.status,"success_with_items")
 
+    def test_date_before_link_in_list_card_is_extracted(self):
+        source={"name":"经济日报","organization":"经济日报","category":"finance","role":"discovery","tier":2,"parser":"media_web","url":"https://www.ce.cn/index.shtml"}
+        payload='<html><body><ul class="news-list"><li><span class="date">2026-07-21 08:15</span><a href="/xwzx/202607/21/t20260721.shtml">多地上调公积金缴存基数上限</a></li></ul></body></html>'.encode()
+        result=source_adapters.parse(payload,source)
+        self.assertEqual(result.status,"success_with_items")
+        self.assertEqual(result.items[0]["published_at"],"2026-07-21T08:15:00+08:00")
+
+    def test_source_specific_recent_date_can_be_used_when_card_omits_time(self):
+        source={"name":"中国气象局","organization":"中国气象局","category":"public-safety","role":"primary","tier":1,"parser":"cma_warning","url":"https://www.cma.gov.cn/","fallback_date":"2026-07-21"}
+        payload='<html><body><div class="content"><a href="/yw/202607/t20260721.shtml">中央气象台继续发布暴雨黄色预警</a></div></body></html>'.encode()
+        result=source_adapters.parse(payload,source)
+        self.assertEqual(result.status,"success_with_items")
+        self.assertEqual(result.items[0]["published_at"],"2026-07-21")
+
     def test_image_link_before_title_link_does_not_consume_official_card(self):
         source={"name":"工信部","organization":"工业和信息化部","category":"tech","role":"primary","tier":1,"parser":"miit_release","url":"https://www.miit.gov.cn/"}
         payload='<html><body><div class="list"><a href="/a"><img src="x.jpg"></a><h3><a href="/a">工业和信息化部发布全国制造业运行情况</a><span>2026-07-21</span></h3></div></body></html>'.encode()

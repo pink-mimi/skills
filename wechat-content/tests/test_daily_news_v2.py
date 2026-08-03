@@ -114,6 +114,27 @@ class WechatDailyNewsV2Tests(unittest.TestCase):
         self.assertIn("focus_event_ids", page)
         self.assertFalse(result["manifest"]["copy_allowed"])
 
+    def test_public_interest_items_are_quick_scan_domestic_not_forced_focus(self):
+        payload = package()
+        payload["items"].append(
+            news_item(
+                9,
+                "public-interest",
+                focus=False,
+                title="微信地震预警服务新增位置更新功能",
+                brief="常用公共服务功能出现变化，用户可按需检查授权设置。",
+                what_happened="平台上线了与公共安全提醒相关的服务功能。",
+                why_it_matters="",
+                reader_action="",
+                keywords=["公共服务", "预警"],
+            )
+        )
+        result = self.build(payload)
+        article = result["article"]
+        self.assertIn("### 国内动态", article)
+        self.assertIn("微信地震预警服务新增位置更新功能", article)
+        self.assertNotIn("平台上线了与公共安全提醒相关的服务功能。", article)
+
 
 if __name__ == "__main__":
     unittest.main()

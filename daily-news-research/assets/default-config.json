@@ -1,19 +1,19 @@
 {
   "schema_version": 2,
   "timezone": "Asia/Shanghai",
-  "window": {"end_time": "06:00", "duration_hours": 24},
+  "window": {"end_time": "06:00", "duration_hours": 24, "mode": "morning"},
   "collection": {
     "timeout_seconds": 10,
     "max_workers": 8,
-    "maximum_candidates": 50,
+    "maximum_candidates": 150,
     "retry_count": 1,
     "discovery_soft_limit_seconds": 60,
     "default_max_response_bytes": 2097152,
     "maximum_redirects": 3
   },
   "verification": {
-    "minimum_queue": 10,
-    "maximum_queue": 15,
+    "minimum_queue": 24,
+    "maximum_queue": 30,
     "soft_limit_seconds": 360,
     "sensitive_categories": ["politics", "finance", "public-safety"],
     "recheck_categories": ["public-safety", "weather", "market", "policy"]
