@@ -200,14 +200,37 @@ class GithubHotResearchTests(unittest.TestCase):
 
     def test_translate_description_covers_current_weekly_project_descriptions(self):
         examples = {
+            "bluetooth mesh chat, IRC vibes": "一个带有 IRC 氛围的蓝牙 Mesh 聊天工具。",
             "A hive mind communication platform": "群体智能协作通信平台。",
             "The fastest browser for AI agents to run browser automation, built for sharing your logged-in browser state with your AI agents, like Codex or Claude Code, without disturbing you. Zero cost, zero config.": "面向 AI 智能体运行浏览器自动化的高速浏览器，可把已登录的浏览器状态安全分享给 Codex 或 Claude Code 等智能体，同时不打扰你的正常使用，零成本、零配置。",
+            "A skill to stop your coding agent from burying the answer. ADHD-friendly output.": "一个帮助编码智能体不要把答案藏起来的技能，输出方式对 ADHD 用户更友好。",
             "Kronos: A Foundation Model for the Language of Financial Markets": "Kronos 是面向金融市场语言的基础模型。",
             "Open-source & free — Battle-tested at Alibaba's scale. Hybrid architecture code review tool: deterministic pipelines + LLM Agent, precise line-level comments, built-in fine-tuned ruleset (NPE, thread-safety, XSS, SQL injection), OpenAI & Anthropic compatible.": "开源免费的混合架构代码审查工具，经过阿里巴巴规模场景验证，结合确定性流水线与 LLM Agent，支持精准行级评论、内置调优规则集，并兼容 OpenAI 与 Anthropic。",
+            "Turn any technical book PDF into a Claude Code skill — ready to study, reference, and use while you work.": "把任意技术书 PDF 转成 Claude Code 技能，方便在工作时学习、查阅和直接使用。",
+            "Create and share 3D architectural projects.": "用于创建和分享 3D 建筑设计项目。",
+            "The most RAM efficient harness": "一个强调极低内存占用的测试/运行 Harness。",
+            "A lightweight, cloud-native GIS platform for visualizing, exploring, and analyzing geospatial data. It runs in the web browser, on the desktop, on mobile, and inside Jupyter notebooks.": "轻量级云原生 GIS 平台，用于可视化、探索和分析地理空间数据，支持浏览器、桌面、移动端和 Jupyter Notebook。",
+            "💖🧸 Self hosted, you-owned Grok Companion, a container of souls of waifu, cyber livings to bring them into our worlds, wishing to achieve Neuro-sama's altitude. Capable of realtime voice chat, Minecraft, Factorio playing. Web / macOS / Windows supported.": "自托管、由用户拥有的 AI 伴侣项目，可进行实时语音聊天，并支持 Minecraft、Factorio 等场景，提供 Web、macOS 和 Windows 版本。",
         }
         for source, expected in examples.items():
             with self.subTest(source=source):
                 self.assertEqual(RUN.translate_description(source), expected)
+
+    def test_translate_description_never_returns_english_fallback_for_known_weekly_descriptions(self):
+        sources = [
+            "bluetooth mesh chat, IRC vibes",
+            "A skill to stop your coding agent from burying the answer. ADHD-friendly output.",
+            "Turn any technical book PDF into a Claude Code skill — ready to study, reference, and use while you work.",
+            "Create and share 3D architectural projects.",
+            "The most RAM efficient harness",
+            "A lightweight, cloud-native GIS platform for visualizing, exploring, and analyzing geospatial data. It runs in the web browser, on the desktop, on mobile, and inside Jupyter notebooks.",
+            "💖🧸 Self hosted, you-owned Grok Companion, a container of souls of waifu, cyber livings to bring them into our worlds, wishing to achieve Neuro-sama's altitude. Capable of realtime voice chat, Minecraft, Factorio playing. Web / macOS / Windows supported.",
+        ]
+        for source in sources:
+            with self.subTest(source=source):
+                translated = RUN.translate_description(source)
+                self.assertNotIn("官方描述：", translated)
+                self.assertTrue(RUN.contains_cjk(translated))
 
     def build(self, raw=None, config=None, output_root=None):
         return RUN.build(

@@ -243,6 +243,17 @@ def translate_description(value):
     if not text or contains_cjk(text):
         return text
     lower = text.lower()
+    exact_translations = {
+        "bluetooth mesh chat, irc vibes": "一个带有 IRC 氛围的蓝牙 Mesh 聊天工具。",
+        "a skill to stop your coding agent from burying the answer. adhd-friendly output.": "一个帮助编码智能体不要把答案藏起来的技能，输出方式对 ADHD 用户更友好。",
+        "turn any technical book pdf into a claude code skill — ready to study, reference, and use while you work.": "把任意技术书 PDF 转成 Claude Code 技能，方便在工作时学习、查阅和直接使用。",
+        "create and share 3d architectural projects.": "用于创建和分享 3D 建筑设计项目。",
+        "the most ram efficient harness": "一个强调极低内存占用的测试/运行 Harness。",
+        "a lightweight, cloud-native gis platform for visualizing, exploring, and analyzing geospatial data. it runs in the web browser, on the desktop, on mobile, and inside jupyter notebooks.": "轻量级云原生 GIS 平台，用于可视化、探索和分析地理空间数据，支持浏览器、桌面、移动端和 Jupyter Notebook。",
+        "💖🧸 self hosted, you-owned grok companion, a container of souls of waifu, cyber livings to bring them into our worlds, wishing to achieve neuro-sama's altitude. capable of realtime voice chat, minecraft, factorio playing. web / macos / windows supported.": "自托管、由用户拥有的 AI 伴侣项目，可进行实时语音聊天，并支持 Minecraft、Factorio 等场景，提供 Web、macOS 和 Windows 版本。",
+    }
+    if lower in exact_translations:
+        return exact_translations[lower]
     if lower == "a hive mind communication platform":
         return "群体智能协作通信平台。"
     if "fastest browser for ai agents to run browser automation" in lower:
@@ -253,7 +264,7 @@ def translate_description(value):
         return "开源免费的混合架构代码审查工具，经过阿里巴巴规模场景验证，结合确定性流水线与 LLM Agent，支持精准行级评论、内置调优规则集，并兼容 OpenAI 与 Anthropic。"
     if "real-time global intelligence dashboard" in lower:
         return "实时全球情报看板。通过 AI 进行新闻聚合、地缘政治监测以及基础设施追踪，把信息集中到统一界面中，方便用户掌握事件情况。"
-    if "stop it from burying the answer" in lower and "adhd-friendly output" in lower:
+    if "burying the answer" in lower and "adhd-friendly output" in lower:
         return "一个帮助编码智能体不要把答案藏起来的技能，输出方式对 ADHD 用户更友好。"
     if "smart, flexible" in lower and "route optimization" in lower:
         return "智能、灵活且高度可定制的开源路线优化应用。"
