@@ -128,7 +128,10 @@ def enrich_trending_row(row, run_at, api_json, api_readme):
     weekly = metrics.get("weekly_stars")
     description = row.get("description") or data.get("description") or f"{repo} 是本周进入 GitHub Trending 的开源项目。"
     original_description = clean_text(row.get("original_description") or description)
-    translated_description = clean_text(row.get("translated_description") or translate_description(original_description))
+    row_translation = clean_text(row.get("translated_description"))
+    if is_stale_english_fallback_translation(row_translation):
+        row_translation = ""
+    translated_description = clean_text(row_translation or translate_description(original_description))
     category_label = "AI 项目" if re.search(r"\b(ai|agent|llm|model)\b", description, re.I) else "开源项目"
     try:
         readme_text = api_readme(repo)
@@ -142,6 +145,9 @@ def enrich_trending_row(row, run_at, api_json, api_readme):
         "url": f"{official_url}/blob/main/LICENSE",
     }
     existing_card = row.get("reader_card") or {}
+    existing_card_translation = clean_text(existing_card.get("translated_description"))
+    if is_stale_english_fallback_translation(existing_card_translation):
+        existing_card_translation = ""
     row.update({
         "repo": repo,
         "official_url": official_url,
@@ -156,7 +162,7 @@ def enrich_trending_row(row, run_at, api_json, api_readme):
             "name": data.get("name") or existing_card.get("name") or repo.split("/")[-1],
             "summary": existing_card.get("summary") or translated_description or description,
             "original_description": existing_card.get("original_description") or original_description,
-            "translated_description": existing_card.get("translated_description") or translated_description,
+            "translated_description": existing_card_translation or translated_description,
             "recommendation": existing_card.get("recommendation") or "本周进入 GitHub Trending，适合先收藏并按需试用。",
             "highlights": existing_card.get("highlights") or ["进入本周 GitHub Trending", "官方仓库资料可追溯", "适合按 README 继续了解"],
             "audience": existing_card.get("audience") or ["开发者", "开源项目观察者"],

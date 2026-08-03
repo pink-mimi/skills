@@ -247,6 +247,29 @@ class GithubHotResearchTests(unittest.TestCase):
         self.assertEqual(card["translated_description"], "一个帮助编码智能体不要把答案藏起来的技能，输出方式对 ADHD 用户更友好。")
         self.assertNotIn("官方描述：", card["translated_description"])
 
+    def test_enrich_trending_row_refreshes_stale_english_fallback_translation(self):
+        row = {
+            "repo": "ayghri/i-have-adhd",
+            "description": "A skill to stop your coding agent from burying the answer. ADHD-friendly output.",
+            "original_description": "A skill to stop your coding agent from burying the answer. ADHD-friendly output.",
+            "translated_description": "官方描述：A skill to stop your coding agent from burying the answer. ADHD-friendly output.",
+            "reader_card": {
+                "original_description": "A skill to stop your coding agent from burying the answer. ADHD-friendly output.",
+                "translated_description": "官方描述：A skill to stop your coding agent from burying the answer. ADHD-friendly output.",
+                "metrics": {"weekly_stars": 5232},
+            },
+        }
+
+        enriched = RUN.enrich_trending_row(
+            row,
+            RUN_AT,
+            api_json=lambda path: {"name": "i-have-adhd", "html_url": "https://github.com/ayghri/i-have-adhd"},
+            api_readme=lambda repo: "",
+        )
+
+        self.assertEqual(enriched["translated_description"], "一个帮助编码智能体不要把答案藏起来的技能，输出方式对 ADHD 用户更友好。")
+        self.assertEqual(enriched["reader_card"]["translated_description"], "一个帮助编码智能体不要把答案藏起来的技能，输出方式对 ADHD 用户更友好。")
+
     def build(self, raw=None, config=None, output_root=None):
         return RUN.build(
             raw or raw_candidates(),
