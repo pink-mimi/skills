@@ -232,6 +232,21 @@ class GithubHotResearchTests(unittest.TestCase):
                 self.assertNotIn("官方描述：", translated)
                 self.assertTrue(RUN.contains_cjk(translated))
 
+    def test_normalize_reader_card_refreshes_stale_english_fallback_translation(self):
+        row = {
+            "repo": "ayghri/i-have-adhd",
+            "description": "A skill to stop your coding agent from burying the answer. ADHD-friendly output.",
+            "reader_card": {
+                "original_description": "A skill to stop your coding agent from burying the answer. ADHD-friendly output.",
+                "translated_description": "官方描述：A skill to stop your coding agent from burying the answer. ADHD-friendly output.",
+            },
+        }
+
+        card = RUN.normalize_reader_card(row)
+
+        self.assertEqual(card["translated_description"], "一个帮助编码智能体不要把答案藏起来的技能，输出方式对 ADHD 用户更友好。")
+        self.assertNotIn("官方描述：", card["translated_description"])
+
     def build(self, raw=None, config=None, output_root=None):
         return RUN.build(
             raw or raw_candidates(),

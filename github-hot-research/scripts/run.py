@@ -314,6 +314,14 @@ def translate_description(value):
     return f"官方描述：{text}"
 
 
+def is_stale_english_fallback_translation(value):
+    text = clean_text(value)
+    if not text.startswith("官方描述："):
+        return False
+    fallback_body = clean_text(text.removeprefix("官方描述："))
+    return bool(fallback_body) and not contains_cjk(fallback_body)
+
+
 def infer_reader_profile(repo, description):
     text = f"{repo} {description}".lower()
     if "block/buzz" in text or "hive mind" in text:
@@ -609,8 +617,11 @@ def normalize_reader_card(row):
     original_description = clean_text(
         existing.get("original_description") or row.get("original_description") or row.get("description")
     )
+    existing_translation = clean_text(existing.get("translated_description"))
+    if is_stale_english_fallback_translation(existing_translation):
+        existing_translation = ""
     translated_description = clean_text(
-        existing.get("translated_description") or row.get("translated_description") or translate_description(original_description)
+        existing_translation or row.get("translated_description") or translate_description(original_description)
     )
     return {
         "category_label": clean_text(existing.get("category_label") or row.get("category")),
