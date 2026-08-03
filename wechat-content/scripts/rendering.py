@@ -544,6 +544,112 @@ def resolve_article_title(editorial: dict, date_label: str, item_count: int) -> 
     return f"{prefix}{item_count}条变化值得关注"
 
 
+DAILY_NEWS_V2_GROUPS = (
+    ("国内动态", {"politics", "society", "education", "legal", "public-safety", "general", "时政", "社会", "教育", "法治", "公共安全"}),
+    ("财经与产业", {"finance", "market", "industry", "consumer", "财经", "市场", "产业", "消费"}),
+    ("科技与未来", {"tech", "technology", "research", "ai", "科技", "科研", "AI"}),
+    ("世界现场", {"world", "international", "国际"}),
+)
+
+
+def publication_date_label(end: datetime) -> str:
+    return f"{end.month}月{end.day}日"
+
+
+def resolve_daily_news_v2_title(editorial: dict, end: datetime, items: list[dict]) -> str:
+    explicit = str(editorial.get("article_title") or "").strip()
+    if explicit:
+        return explicit
+    categories = {str(item.get("category") or "") for item in items}
+    topic = []
+    if categories & (DAILY_NEWS_V2_GROUPS[0][1]):
+        topic.append("政策")
+    if categories & (DAILY_NEWS_V2_GROUPS[1][1]):
+        topic.append("产业")
+    if categories & (DAILY_NEWS_V2_GROUPS[2][1]):
+        topic.append("科技")
+    if any(str(item.get("geographic_scope")) == "international" or str(item.get("category")).lower() in {"world", "international"} for item in items):
+        topic.append("全球动态")
+    return f"{publication_date_label(end)}今日简报：{'、'.join(topic[:3]) or '重要动态'}"
+
+
+def daily_news_v2_group(item: dict) -> str:
+    category = str(item.get("category") or "general")
+    if str(item.get("geographic_scope") or "").lower() == "international":
+        return "世界现场"
+    for label, categories in DAILY_NEWS_V2_GROUPS:
+        if category in categories or category.lower() in categories:
+            return label
+    return "国内动态"
+
+
+def build_daily_news_v2_article(payload: dict):
+    items = payload["items"]
+    editorial = payload.get("editorial") or {}
+    start = datetime.fromisoformat(payload["window"]["start"])
+    end = datetime.fromisoformat(payload["window"]["end"])
+    title = resolve_daily_news_v2_title(editorial, end, items)
+    lead = str(editorial.get("lead") or "过去 24 小时，几条变化值得放在同一张简报里看。").strip()
+    window_text = f"北京时间 {start.year}年{start.month}月{start.day}日{start:%H:%M}—{end.month}月{end.day}日{end:%H:%M}"
+    weekday = "一二三四五六日"[end.weekday()]
+    lines = [
+        f"# {title}",
+        "",
+        f"{publication_date_label(end)}，星期{weekday}。",
+        "",
+        lead,
+        "",
+        "<!-- role:time-window -->",
+        f"> 统计时段：{window_text}。",
+        "",
+        "## 今日速览",
+        "",
+    ]
+    grouped = {label: [] for label, _ in DAILY_NEWS_V2_GROUPS}
+    for item in items:
+        grouped.setdefault(daily_news_v2_group(item), []).append(item)
+    for label, _categories in DAILY_NEWS_V2_GROUPS:
+        group_items = grouped.get(label) or []
+        if not group_items:
+            continue
+        lines += [f"### {label}", ""]
+        for item in group_items:
+            source = str(item.get("source") or "来源机构").strip()
+            lines.append(f"- **{item.get('title','')}**：{item.get('brief','')}（{source}）")
+        lines.append("")
+    focus_ids = list(editorial.get("focus_event_ids") or [])
+    focus = [item for event_id in focus_ids for item in items if item.get("event_id") == event_id]
+    if focus:
+        lines += ["", "## 重点解读", ""]
+        for index, item in enumerate(focus, 1):
+            keywords = "｜".join(item.get("keywords") or [item.get("category", "新闻")])
+            lines += [
+                f"### {index:02d}｜{item.get('title','')}",
+                "",
+                "<!-- role:keywords -->",
+                f"> 关键词：{keywords}",
+                "",
+                "<!-- role:section-label -->",
+                "**发生了什么**",
+                "",
+                str(item.get("what_happened") or "").strip(),
+            ]
+            if item.get("why_it_matters"):
+                lines += ["", "<!-- role:section-label -->", "**为什么重要**", "", str(item.get("why_it_matters")).strip()]
+            if item.get("reader_action"):
+                lines += ["", "<!-- role:section-label -->", "**普通人需要注意什么**", "", str(item.get("reader_action")).strip()]
+            if publishable_reader_tip(item.get("reader_tip")):
+                lines += ["", "<!-- role:reader-tip -->", f"> 读者提示：{str(item.get('reader_tip')).strip()}"]
+            lines.append("")
+    lines += ["", "## 参考来源", ""]
+    for index, item in enumerate(items, 1):
+        source_url = item.get("url", "")
+        lines.append(f"{index}. [{item.get('source','原始来源')}：{item.get('title','')}]({source_url})\n   原文地址：{source_url}")
+    lines += ["", f"> {build_news_notice(items)}", "", "![结尾图](images/结尾图.png)"]
+    summary = f"今日简报整理 {len(items)} 条经核验新闻，重点展开 {len(focus)} 条。"
+    return "\n".join(lines), title, summary
+
+
 def format_metric(value) -> str:
     if value is None or value == "":
         return ""
@@ -889,6 +995,8 @@ def build_article(payload: dict):
         summary = editorial.get("summary") or f"整理 {len(items)} 个近期 AI 模型、产品或应用，说明用途、适合人群、费用门槛和风险。"
         return "\n".join(lines), title, summary
     if payload["content_type"] == "daily-news":
+        if int(payload.get("schema_version", 1)) == 2:
+            return build_daily_news_v2_article(payload)
         editorial=payload.get("editorial") or {}
         start=datetime.fromisoformat(payload["window"]["start"]); end=datetime.fromisoformat(payload["window"]["end"])
         date_label=f"{start.month}月{start.day}日"

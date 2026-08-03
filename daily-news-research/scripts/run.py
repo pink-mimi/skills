@@ -145,6 +145,76 @@ def build_editorial_workbench(queue):
         row["missing_fields"]=[field for field in required if not row.get(field)]
         items.append(row)
     return {"schema_version":1,"status":"awaiting_editorial_enrichment","instructions":"逐条打开原文核验，补齐编辑字段后使用 --editorial-input 重新 build。","items":items}
+def _wants_v2(config):
+    selection=config.get("selection",{})
+    return int(config.get("schema_version",1))>=2 or any(key in selection for key in ("target","compact_minimum","focus_target"))
+
+def _valid_text(value):
+    return bool(str(value or "").strip())
+
+def _auto_brief(row):
+    return clean(row.get("brief") or "")
+
+def _impact_value(row):
+    return {"major":3,"high":3,"national":3,"medium":2,"limited":1}.get(str(row.get("impact_level") or "medium").lower(),2)
+
+def _select_focus(items, editorial, selection):
+    requested=[str(value).strip() for value in (editorial.get("focus_event_ids") or []) if str(value).strip()]
+    ids={row.get("event_id") for row in items}
+    seen=set()
+    valid=[event_id for event_id in requested if event_id in ids and not (event_id in seen or seen.add(event_id))]
+    target=int(selection.get("focus_target",4)); minimum=int(selection.get("focus_minimum",3)); maximum=int(selection.get("focus_maximum",5))
+    if len(valid)>=minimum:
+        return valid[:maximum]
+    counts={}; chosen=list(valid)
+    for row in sorted(items,key=lambda item:(-_impact_value(item),str(item.get("event_id","")))):
+        event_id=row.get("event_id")
+        category=str(row.get("category") or "general")
+        if not event_id or event_id in chosen or counts.get(category,0)>=2:
+            continue
+        chosen.append(event_id); counts[category]=counts.get(category,0)+1
+        if len(chosen)>=target:
+            break
+    return chosen[:maximum]
+
+def _validate_v2(package, configured_focus=None):
+    risks=[]
+    items=package.get("items",[])
+    ids=[row.get("event_id") for row in items]
+    id_set=set(ids)
+    if len(id_set)!=len(ids):
+        risks.append("items[].event_id 存在重复")
+    missing_brief=[row for row in items if not _valid_text(row.get("brief"))]
+    if missing_brief:
+        risks.append(f"{len(missing_brief)} 条新闻缺少 brief")
+    unverified=[row for row in items if row.get("verification_status") not in {"verified","partial"}]
+    if unverified:
+        risks.append(f"{len(unverified)} 条新闻关键事实未核验")
+    focus=list((package.get("editorial") or {}).get("focus_event_ids") or [])
+    if len(focus)!=len(set(focus)) or any(event_id not in id_set for event_id in focus):
+        risks.append("editorial.focus_event_ids 存在重复或引用不存在的事件")
+    if configured_focus:
+        requested=[str(value).strip() for value in configured_focus if str(value).strip()]
+        if len(requested)!=len(set(requested)) or any(event_id not in id_set for event_id in requested):
+            risks.append("输入 editorial.focus_event_ids 存在重复或引用不存在的事件")
+    if len(items)<5:
+        risks.append("合格新闻少于 5 条，进入 needs_review")
+    return risks
+
+def _title_topic(items):
+    categories={str(row.get("category") or "") for row in items}
+    has_policy=bool(categories & {"politics","legal","society","education","public-safety","时政","社会","教育","法治","公共安全"})
+    has_tech=bool(categories & {"tech","technology","ai","科技","AI"})
+    has_world=any(str(row.get("geographic_scope"))=="international" or str(row.get("category")).lower() in {"world","international","国际"} for row in items)
+    if has_policy and has_tech and has_world:
+        return "政策、科技与全球动态"
+    parts=[]
+    if has_policy: parts.append("政策")
+    if categories & {"finance","market","industry","consumer","财经","市场","产业","消费"}: parts.append("产业")
+    if has_tech: parts.append("科技")
+    if has_world: parts.append("全球动态")
+    return "、".join(parts[:3]) or "重要动态"
+
 def build(raw, run_at, config):
     start,end=window(run_at,config); seen=set(); eligible=[]; review=[]
     for item in raw.get("items",[]):
@@ -158,6 +228,10 @@ def build(raw, run_at, config):
         if config.get("selection",{}).get("scope") in {"domestic","china-national"} and not domestic_relevant(row):
             row["review_reason"]="与国内日报定位缺少直接关联"
             review.append(row); continue
+        scope=str(row.get("geographic_scope") or "").lower()
+        if (scope=="international" or str(row.get("category") or "").lower() in {"world","international","国际"}) and not research.international_is_relevant(row):
+            row["review_reason"]="国际新闻缺少重大公共影响"
+            review.append(row); continue
         seen.add(key); row["published_at"]=published.isoformat(); eligible.append(row)
     chosen=[]; counts={}; maximum=int(config["selection"]["maximum"])
     for row in eligible:
@@ -166,15 +240,38 @@ def build(raw, run_at, config):
         chosen.append(row); counts[category]=counts.get(category,0)+1
         if len(chosen)>=maximum: break
     meta=raw.get("meta",{}); minimum_sources=int(config.get("collection",{}).get("minimum_successful_sources",0)); source_ok=not meta or int(meta.get("successful_sources",0))>=minimum_sources
+    wants_v2=_wants_v2(config)
+    if wants_v2:
+        for index,row in enumerate(chosen,1):
+            row["event_id"]=str(row.get("event_id") or f"evt-{index:02d}")
+            row["brief"]=_auto_brief(row)
     required=config.get("selection",{}).get("required_editorial_fields",[])
     incomplete=[row for row in chosen if not editorial_complete(row,required)]
-    base_ready=len(chosen)>=int(config["selection"]["minimum"]) and len(counts)>=int(config["selection"]["minimum_categories"]) and source_ok
+    selection=config.get("selection",{})
+    standard_minimum=int(selection.get("minimum",5))
+    compact_minimum=int(selection.get("compact_minimum",standard_minimum))
+    enough_count=len(chosen)>=compact_minimum if wants_v2 else len(chosen)>=standard_minimum
+    base_ready=enough_count and len(counts)>=int(config["selection"]["minimum_categories"]) and source_ok
     ready=base_ready and not incomplete
     risks=["发布前逐条打开原文复核"]
     if raw.get("errors"): risks.append(f"{len(raw['errors'])} 个来源采集失败，已保留错误记录")
-    if not base_ready: risks.append("候选数量、类别覆盖或成功来源不足")
+    if wants_v2 and len(chosen)<5: risks.append("合格新闻少于 5 条，进入 needs_review")
+    elif not base_ready: risks.append("候选数量、类别覆盖或成功来源不足")
     if incomplete: risks.append(f"{len(incomplete)} 条新闻缺少发生了什么、为什么重要、读者行动或提醒等深度字段")
-    return {"schema_version":1,"content_type":"daily-news","package_id":f"daily-news-{run_at.astimezone(BJT):%Y-%m-%d}","run_at":run_at.isoformat(),"status":"ready_for_human_review" if ready else "needs_review","window":{"start":start.isoformat(),"end":end.isoformat(),"boundary":"left_closed_right_open"},"collection":meta,"editorial":raw.get("editorial",{}),"items":chosen,"sources":[{"name":x.get("source"),"url":x.get("url")} for x in chosen],"risks":risks,"review_items":review}
+    editorial=dict(raw.get("editorial",{}))
+    package={"schema_version":2 if wants_v2 else 1,"content_type":"daily-news","package_id":f"daily-news-{run_at.astimezone(BJT):%Y-%m-%d}","run_at":run_at.isoformat(),"status":"ready_for_human_review" if ready else "needs_review","window":{"start":start.isoformat(),"end":end.isoformat(),"boundary":"left_closed_right_open"},"collection":meta,"editorial":editorial,"items":chosen,"sources":[{"name":x.get("source"),"url":x.get("url")} for x in chosen],"risks":risks,"review_items":review}
+    if wants_v2:
+        edition_mode="standard" if len(chosen)>=standard_minimum else "compact" if len(chosen)>=compact_minimum else "needs_review"
+        editorial.setdefault("lead","过去 24 小时，几条变化值得放在同一张简报里看。")
+        editorial.setdefault("article_title",f"{run_at.astimezone(BJT).month}月{run_at.astimezone(BJT).day}日今日简报：{_title_topic(chosen)}")
+        configured_focus=editorial.get("focus_event_ids")
+        editorial["focus_event_ids"]=_select_focus(chosen,editorial,selection)
+        package["edition_mode"]=edition_mode
+        validation_risks=_validate_v2(package,configured_focus)
+        if validation_risks:
+            package["risks"]=list(dict.fromkeys(package.get("risks",[])+validation_risks))
+            package["status"]="needs_review"
+    return package
 def target(root, run_at, fixture=False):
     namespace="test-fixtures/daily-news" if fixture else "daily-news"
     return Path(root)/namespace/run_at.astimezone(BJT).date().isoformat()
@@ -282,7 +379,7 @@ def main():
         path=package_path
         if not path.exists(): raise SystemExit("缺少 content-package.json")
         payload=load(path); errors=[]
-        if payload.get("schema_version")!=1: errors.append("不支持的 schema_version")
+        if payload.get("schema_version") not in (1,2): errors.append("不支持的 schema_version")
         if payload.get("content_type")!="daily-news": errors.append("content_type 错误")
         if not payload.get("items"): errors.append("没有入选新闻")
         for required in ("source-report.md","verification-queue.json","editorial-workbench.json","source-health.json","excluded-news.json"):

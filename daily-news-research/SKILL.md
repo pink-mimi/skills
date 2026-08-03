@@ -54,3 +54,11 @@ python scripts/run.py sources --format json
 正式的 `collect`、`build` 和 `all` 禁止使用通用 `--input`。`--editorial-input` 是唯一允许写回人工或 Codex 原文核验结果的入口，仅合并白名单编辑字段，不替换原始采集证据。`--input` 仅供 `query` 做离线查询；自动化测试必须显式使用 `--fixture-input`，其结果隔离写入 `test-fixtures/daily-news/`，强制标记 `needs_review`，不得覆盖正式审核包。`refresh` 必须联网采集，不能与任何 fixture 输入同时使用。
 
 每次构建同时生成 `source-report.md`，列出采集平台、成功率、失败来源、候选数量和类别分布。读取详细来源边界时打开 `references/source-catalog.md`。
+
+## 今日简报 v2
+
+默认日报栏目已升级为国内外综合的“今日简报”。正常版目标为 12 条速览，允许 8—15 条；国内目标约 8 条，国际目标约 4 条，国际最多 5 条。合格新闻不足时允许生成 5—7 条精简版，少于 5 条必须保持 `needs_review`，不得用旧闻、娱乐、普通赛事或低质量转载凑数。
+
+`content-package.json` 默认使用 daily-news schema v2：每条 `items[]` 必须包含 `event_id`、可直接面向读者的 `brief`、来源、时间、核验状态和 `what_happened`。`brief` 不能直接复制 RSS 摘要。`editorial.focus_event_ids` 只引用 `items[].event_id`，用于从速览池中选出 3—5 条重点，不复制新闻对象。
+
+国际新闻不再要求必须与中国直接相关，但必须属于重大政策、经济、科技、公共安全、地缘变化或具有广泛社会影响的事件，并填写 `international_impact_reason` 或等价公共影响说明。国际奇闻、空泛口头表态、明星综艺、影视宣传、普通体育赛果和赛事宣传继续默认排除。

@@ -24,14 +24,21 @@
     "require_all_sensitive_primary_sources": true
   },
   "selection": {
-    "minimum": 5,
-    "maximum": 8,
+    "minimum": 8,
+    "compact_minimum": 5,
+    "maximum": 15,
+    "target": 12,
     "minimum_categories": 4,
-    "maximum_per_category": 2,
+    "maximum_per_category": 5,
     "maximum_local": 1,
-    "maximum_international": 1,
-    "scope": "china-national",
-    "required_editorial_fields": ["what_happened", "editor_note", "keywords"]
+    "maximum_international": 5,
+    "target_domestic": 8,
+    "target_international": 4,
+    "focus_target": 4,
+    "focus_minimum": 3,
+    "focus_maximum": 5,
+    "scope": "domestic-international",
+    "required_editorial_fields": ["brief", "what_happened", "editor_note", "keywords"]
   },
   "sources": [
     {"name":"中国政府网·政策文件库","organization":"中国政府网","url":"https://sousuo.www.gov.cn/zcwjk/","type":"web","parser":"gov_policy","category":"politics","tier":1,"role":"primary","daily_default":true,"enabled":true,"canonical_domains":["gov.cn","www.gov.cn","sousuo.www.gov.cn"],"max_response_bytes":2097152},

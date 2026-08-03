@@ -98,7 +98,7 @@ class ModularArchitectureTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 package = next(output_root.glob(self.research_output_glob(skill_name, content_type)))
                 payload = json.loads(package.read_text(encoding="utf-8"))
-                expected_schema = 2 if skill_name == "github-hot-research" else 1
+                expected_schema = 2 if skill_name in {"daily-news-research", "github-hot-research"} else 1
                 self.assertEqual(payload["schema_version"], expected_schema)
                 self.assertEqual(payload["content_type"], content_type)
                 self.assertIn(payload["status"], {"ready_for_human_review", "needs_review"})

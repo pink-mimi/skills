@@ -89,6 +89,20 @@ def local_is_newsworthy(row):
 
 
 def international_is_relevant(row):
+    category=str(row.get("category") or "").strip().lower()
+    scope=str(row.get("geographic_scope") or "").strip().lower()
+    if category not in {"world","international","国际"} and scope!="international":
+        return True
+    title=str(row.get("title") or "")
+    summary=str(row.get("summary") or "")
+    text=f"{title} {summary} {row.get('international_impact_reason') or ''} {row.get('public_interest_reason') or ''}"
+    oddity=("奇闻","趣闻","围观","猎奇","走红","爆红","网友热议","口头表态","称将","表示愿意","明星","综艺")
+    if any(marker in text for marker in oddity):
+        return False
+    concrete_markers=("重大","主要经济体","央行","政策","科技","公共安全","地缘","冲突","战争","供应链","能源","公共卫生","监管","制裁","选举","法院","灾害","交通中断")
+    reason_text=str(row.get("international_impact_reason") or row.get("public_interest_reason") or "")
+    if reason_text and any(marker in text for marker in concrete_markers):
+        return True
     reason=str(row.get("china_relevance_reason") or "").strip()
     pathways=("贸易","出口","进口","能源","油价","供应链","签证","出行","中国公民","人民币","金融市场","芯片","科技限制","公共卫生","外交")
     return len(reason)>=10 and any(marker in reason for marker in pathways)
@@ -228,7 +242,8 @@ def select_verified_items(rows,config,collection_meta,run_at):
     if incomplete: risks.append("部分新闻缺少必要编辑字段")
     organizations=int(collection_meta.get("successful_organizations",0))
     if organizations<int(health.get("minimum_successful_organizations",0)): risks.append("成功采集机构数量不足")
-    if len(chosen)<int(selection.get("minimum",5)) or len(categories)<int(selection.get("minimum_categories",4)): risks.append("入选数量或类别覆盖不足")
+    count_floor=int(selection.get("compact_minimum",selection.get("minimum",5)))
+    if len(chosen)<count_floor or len(categories)<int(selection.get("minimum_categories",4)): risks.append("入选数量或类别覆盖不足")
     ready=not risks
     return {"status":"ready_for_human_review" if ready else "needs_review","items":chosen,"excluded":excluded,"risks":risks,"category_counts":categories,"scope_counts":scopes}
 

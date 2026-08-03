@@ -27,7 +27,7 @@ class DailyNewsResearchTests(unittest.TestCase):
         items=[]
         titles=("国务院公布公共服务安排","金融管理部门发布市场规则","全国就业服务出现新变化","工业领域发布技术规范","应急部门更新防灾预警")
         for index,category in enumerate(categories):
-            items.append({"title":titles[index],"url":f"https://example.com/{index}","source":"权威媒体","organization":f"机构{index}","source_role":"discovery","category":category,"published_at":"2026-07-22T12:00:00+08:00","geographic_scope":"national","verification_status":"verified","verified_at":"2026-07-23T05:30:00+08:00","primary_sources":[{"name":"主管部门","url":f"https://official.example/{index}"}],"what_happened":"官方公布了新的安排。","why_it_matters":"相关规则将影响公众办理事务。","reader_action":"办理前核对适用范围。","editor_note":"具体执行以主管部门通知为准。","keywords":["公共事务"]})
+            items.append({"title":titles[index],"url":f"https://example.com/{index}","source":"权威媒体","organization":f"机构{index}","source_role":"discovery","category":category,"published_at":"2026-07-22T12:00:00+08:00","geographic_scope":"national","verification_status":"verified","verified_at":"2026-07-23T05:30:00+08:00","primary_sources":[{"name":"主管部门","url":f"https://official.example/{index}"}],"brief":"官方公布新的公共安排，适合放入今日速览。","what_happened":"官方公布了新的安排。","why_it_matters":"相关规则将影响公众办理事务。","reader_action":"办理前核对适用范围。","editor_note":"具体执行以主管部门通知为准。","keywords":["公共事务"]})
         raw={"items":items,"meta":{"successful_organizations":8},"source_health":[]}
         package,_queue,_excluded=run.prepare_research(raw,run.datetime.fromisoformat("2026-07-23T06:00:00+08:00"),config)
         self.assertEqual(package["status"],"ready_for_human_review",package.get("risks"))
@@ -35,13 +35,13 @@ class DailyNewsResearchTests(unittest.TestCase):
 
     def test_prepare_research_preserves_partial_editorial_enrichment(self):
         config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
-        item={"title":"中央财政基础研究投入稳步增加","url":"https://example.com/research","source":"科技日报","organization":"科技日报","source_role":"discovery","category":"tech","published_at":"2026-07-22T12:00:00+08:00","geographic_scope":"national","verification_status":"partial","verified_at":"2026-07-23T05:30:00+08:00","background_sources":[{"name":"财政部预算材料","url":"https://example.com/budget"}],"what_happened":"权威媒体报道相关投入持续增加。","why_it_matters":"基础研究投入关系长期创新能力。","reader_action":"引用数字时核对预算口径。","editor_note":"报道中的部分数字仍需结合官方材料复核。","keywords":["基础研究","科研投入"]}
+        item={"title":"中央财政基础研究投入稳步增加","url":"https://example.com/research","source":"科技日报","organization":"科技日报","source_role":"discovery","category":"tech","published_at":"2026-07-22T12:00:00+08:00","geographic_scope":"national","verification_status":"partial","verified_at":"2026-07-23T05:30:00+08:00","background_sources":[{"name":"财政部预算材料","url":"https://example.com/budget"}],"brief":"科研投入信息来自权威报道，仍需发布前复核官方口径。","what_happened":"权威媒体报道相关投入持续增加。","why_it_matters":"基础研究投入关系长期创新能力。","reader_action":"引用数字时核对预算口径。","editor_note":"报道中的部分数字仍需结合官方材料复核。","keywords":["基础研究","科研投入"]}
         package,_queue,_excluded=run.prepare_research({"items":[item],"meta":{"successful_organizations":8},"source_health":[]},run.datetime.fromisoformat("2026-07-23T06:00:00+08:00"),config)
         self.assertEqual(package["items"][0]["verification_status"],"partial")
 
     def test_domestic_digest_rejects_unrelated_foreign_items(self):
         config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
-        base={"published_at":"2026-07-19T12:00:00+08:00","summary":"摘要","what_happened":"事实","why_it_matters":"影响","reader_action":"建议","editor_note":"提醒","keywords":["关键词"]}
+        base={"published_at":"2026-07-19T12:00:00+08:00","summary":"摘要","brief":"经核验的一句话事实摘要。","what_happened":"事实","why_it_matters":"影响","reader_action":"建议","editor_note":"提醒","keywords":["关键词"]}
         rows=[]
         domestic_categories=("时政","财经","科技","公共安全")
         for index,title in enumerate(("中国多地推进公共服务安排","国内服务消费数据发布","北京发布科技应用计划","广西更新防汛响应","加拿大调整边境措施","美军在伊拉克发生事故","世界杯决赛准备就绪")):
@@ -65,7 +65,7 @@ class DailyNewsResearchTests(unittest.TestCase):
         config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
         self.assertEqual(
             config["selection"]["required_editorial_fields"],
-            ["what_happened","editor_note","keywords"],
+            ["brief","what_happened","editor_note","keywords"],
         )
 
     def test_default_sources_cover_four_categories(self):
@@ -91,7 +91,9 @@ class DailyNewsResearchTests(unittest.TestCase):
         self.assertTrue(any(source["role"]=="primary" for source in defaults))
         world=[source for source in defaults if source["category"]=="world"]
         self.assertLessEqual(len(world),1)
-        self.assertEqual(config["selection"]["maximum_international"],1)
+        self.assertEqual(config["selection"]["maximum_international"],5)
+        self.assertEqual(config["selection"]["target_international"],4)
+        self.assertEqual(config["selection"]["target"],12)
 
     def test_collection_and_selection_limits_are_explicit(self):
         config=json.loads((SKILL/"assets/default-config.json").read_text(encoding="utf-8"))
@@ -147,7 +149,8 @@ class DailyNewsResearchTests(unittest.TestCase):
             result=subprocess.run([sys.executable,str(SKILL/"scripts/run.py"),"all","--fixture-input",str(FIXTURE),"--output-root",temp,"--run-at","2026-07-19T06:20:00+08:00"],capture_output=True,text=True)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
             data=json.loads((Path(temp)/"test-fixtures/daily-news/2026-07-19/content-package.json").read_text(encoding="utf-8"))
-            self.assertEqual((data["schema_version"],data["content_type"]),(1,"daily-news")); self.assertNotIn("wechat_html",data)
+            self.assertEqual((data["schema_version"],data["content_type"]),(2,"daily-news")); self.assertNotIn("wechat_html",data)
+            self.assertIn("edition_mode",data)
             report=(Path(temp)/"test-fixtures/daily-news/2026-07-19/source-report.md")
             self.assertTrue(report.exists())
             report_text=report.read_text(encoding="utf-8")

@@ -99,10 +99,19 @@ def resolve_cover_title(payload: dict, article_title: str) -> str:
 def enforce_content_quality(payload: dict) -> dict:
     payload=deepcopy(payload); payload["items"]=[dict(item) for item in payload.get("items",[])]
     if payload.get("content_type")=="daily-news":
-        incomplete=[item for item in payload["items"] if any(not item.get(field) for field in NEWS_REQUIRED_FIELDS)]
+        required = ("event_id", "brief", "what_happened", "keywords") if int(payload.get("schema_version", 1)) == 2 else NEWS_REQUIRED_FIELDS
+        incomplete=[item for item in payload["items"] if any(not item.get(field) for field in required)]
         if incomplete:
             payload["status"]="needs_review"
-            payload["risks"]=list(payload.get("risks") or [])+[f"{len(incomplete)} 条新闻缺少发布级解释字段"]
+            field_label = "brief 或重点正文必填字段" if int(payload.get("schema_version", 1)) == 2 else "发布级解释字段"
+            payload["risks"]=list(payload.get("risks") or [])+[f"{len(incomplete)} 条新闻缺少 {field_label}"]
+        if int(payload.get("schema_version", 1)) == 2:
+            ids={item.get("event_id") for item in payload["items"]}
+            focus=list((payload.get("editorial") or {}).get("focus_event_ids") or [])
+            invalid_focus=len(focus)!=len(set(focus)) or any(event_id not in ids for event_id in focus)
+            if invalid_focus:
+                payload["status"]="needs_review"
+                payload["risks"]=list(payload.get("risks") or [])+["editorial.focus_event_ids 存在重复或引用不存在的事件"]
     return payload
 
 
@@ -155,6 +164,33 @@ def copy_eligibility(payload: dict) -> dict:
             "reason":"ready" if allowed else "needs_review",
             "publish_ready":allowed,
             "review_counts":{"verified":0,"partial":0,"unverified":0},
+        }
+    if int(payload.get("schema_version", 1)) == 2:
+        risks=list(dict.fromkeys(str(risk) for risk in (payload.get("risks") or [])))
+        ids={item.get("event_id") for item in payload.get("items",[])}
+        focus=list((payload.get("editorial") or {}).get("focus_event_ids") or [])
+        missing_brief=[item for item in payload.get("items",[]) if not item.get("brief")]
+        invalid_focus=len(focus)!=len(set(focus)) or any(event_id not in ids for event_id in focus)
+        reasons=[]
+        if missing_brief:
+            reasons.append(f"{len(missing_brief)} 条新闻缺少 brief")
+        if invalid_focus:
+            reasons.append("focus_event_ids 存在重复或引用不存在的事件")
+        reasons += [risk for risk in risks if ("brief" in risk or "focus_event_ids" in risk) and risk not in reasons]
+        statuses=[str(item.get("verification_status") or "unverified") for item in payload.get("items",[])]
+        review_counts={
+            "verified":statuses.count("verified"),
+            "partial":statuses.count("partial"),
+            "unverified":len([status for status in statuses if status not in {"verified","partial"}]),
+        }
+        if reasons:
+            return {"allowed":False,"reason":"；".join(reasons),"publish_ready":False,"review_counts":review_counts}
+        publish_ready=bool(statuses) and payload.get("status")=="ready_for_human_review" and review_counts["partial"]==0 and review_counts["unverified"]==0
+        return {
+            "allowed":bool(statuses),
+            "reason":"ready" if publish_ready else "review_required",
+            "publish_ready":publish_ready,
+            "review_counts":review_counts,
         }
     incomplete=[item for item in payload.get("items",[]) if any(not item.get(field) for field in NEWS_REQUIRED_FIELDS)]
     def effective_status(item):
@@ -238,6 +274,9 @@ def main() -> None:
     ) or (
         payload.get("schema_version") == 2
         and payload.get("content_type") == "github-hot"
+    ) or (
+        payload.get("schema_version") == 2
+        and payload.get("content_type") == "daily-news"
     )
     if not supported:
         raise SystemExit("不支持的标准内容包")
@@ -321,6 +360,8 @@ def main() -> None:
         write(out / "备选标题.txt", "\n".join(title_options(payload["content_type"], title, len(payload["items"]))))
         write(out / "公众号摘要.txt", summary)
         manifest = {"schema_version": 1, "input_schema_version":payload["schema_version"], "content_template": payload["content_type"], "template_version": TEMPLATE_VERSION, "theme": theme, "theme_version": "2.0.0", "image_mode": image_mode, "input_status":payload["status"], "copy_allowed":copy_state["allowed"], "copy_reason":copy_state["reason"], "publish_ready":copy_state["publish_ready"], "review_counts":copy_state["review_counts"], "source_package": payload["package_id"]}
+        if payload["content_type"] == "daily-news" and payload.get("edition_mode"):
+            manifest["edition_mode"] = payload["edition_mode"]
         if project_images:
             manifest["project_images"] = [
                 {key:value for key,value in record.items() if key != "source_path"}

@@ -88,3 +88,11 @@ daily-news/YYYY-MM-DD/
 采集器限制协议、私网地址、重定向和响应体积，不执行页面 JavaScript，不长期保存新闻全文、Cookie 或密钥。本 Skill 独立实现，不依赖 `$news`、`wechat-article-writer` 或公众号模板；它只生成研究内容包，不上传或发布。
 
 详细来源见 [`references/source-catalog.md`](references/source-catalog.md)，官方核验路由见 [`references/official-source-directory.md`](references/official-source-directory.md)。
+
+## 今日简报 v2
+
+默认产品现在是国内外综合的“今日简报”，不是只收国内新闻的昨日简讯。内容包使用 daily-news schema v2：目标 12 条速览，允许 8—15 条；其中约 8 条国内、4 条国际；再从同一个 `items` 池里用 `editorial.focus_event_ids` 选择 3—5 条重点展开。
+
+每条入选新闻必须有 `brief`，这是核验后写给读者的一句话事实摘要，不能直接使用 RSS 摘要。`why_it_matters`、`reader_action` 和 `reader_tip` 仍然按需填写，没有明确公共影响或可执行事项时留空。少于 5 条、缺 `brief`、重点引用失效或关键事实未核验时，输出保持 `needs_review`。
+
+国际新闻可以入选重大政策、经济、科技、公共安全、地缘变化和全球性公共影响事件；普通奇闻、明星综艺、影视宣传、常规体育赛果、营销稿和只有口头表态而无实质变化的消息继续排除。
