@@ -1201,6 +1201,35 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
                 f'font-size:0">{badges}</section>'
             )
             continue
+        github_tags = re.fullmatch(r"<!-- github-tags:(.+) -->", line)
+        if github_tags:
+            tags = "".join(
+                f'<span style="display:inline-block;margin:0 8px 8px 0;padding:4px 10px;'
+                f'border:1px solid {primary}33;border-radius:999px;background:{bg};'
+                f'color:{primary};font-size:13px;line-height:1.45;font-weight:700">{html.escape(tag.strip())}</span>'
+                for tag in github_tags.group(1).split("|")
+                if tag.strip()
+            )
+            blocks.append(
+                f'<section data-role="github-tags" style="margin:2px 0 16px;'
+                f'font-size:0">{tags}</section>'
+            )
+            continue
+        github_highlight_row = re.fullmatch(r"<!-- github-highlight-row:(.+) -->", line)
+        if github_highlight_row:
+            chips = "".join(
+                f'<span data-role="github-highlight-chip" style="display:inline-block;vertical-align:top;'
+                f'margin:0 8px 8px 0;padding:8px 14px;min-width:112px;text-align:center;'
+                f'border-radius:8px;background:{bg};color:{primary};font-size:14px;line-height:1.55;'
+                f'font-weight:700;box-sizing:border-box;overflow-wrap:anywhere">{inline(chip.strip(),primary)}</span>'
+                for chip in github_highlight_row.group(1).split("|")
+                if chip.strip()
+            )
+            blocks.append(
+                f'<section data-role="github-highlight-row" style="margin:8px 0 14px;font-size:0">'
+                f'{chips}</section>'
+            )
+            continue
         role_match = re.fullmatch(r"<!-- role:([a-z-]+) -->", line)
         if role_match:
             pending_role = role_match.group(1)
@@ -1217,7 +1246,9 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
         if line.startswith("### "): blocks.append(f'<h3 data-role="github-project-name" style="margin:6px 0 12px;color:{ink};font-size:25px;line-height:1.35;font-weight:850;letter-spacing:-.02em">{inline(line[4:],primary)}</h3>'); continue
         if line.startswith("> "):
             content=inline(line[2:],primary)
-            if pending_role == "time-window": blocks.append(f'<blockquote data-role="time-window" style="margin:18px 0;padding:14px 16px;border:1px solid {primary}2E;border-left:4px solid {primary};background:{bg};border-radius:10px;box-shadow:0 4px 12px {primary}12;color:{ink};font-size:15px;line-height:1.8">{content}</blockquote>')
+            if payload.get("content_type") == "github-hot" and line[2:].startswith("**一句话推荐**"):
+                blocks.append(f'<blockquote data-role="github-recommendation" style="margin:18px 0 18px;padding:15px 18px;border:0;border-left:4px solid {primary};background:{bg};border-radius:8px;color:{primary};font-size:15px;line-height:1.85;box-sizing:border-box">{content}</blockquote>')
+            elif pending_role == "time-window": blocks.append(f'<blockquote data-role="time-window" style="margin:18px 0;padding:14px 16px;border:1px solid {primary}2E;border-left:4px solid {primary};background:{bg};border-radius:10px;box-shadow:0 4px 12px {primary}12;color:{ink};font-size:15px;line-height:1.8">{content}</blockquote>')
             elif pending_role == "keywords": blocks.append(f'<p data-role="keywords" style="margin:10px 0 20px;padding:12px 15px;border-left:4px solid {primary};border-radius:8px;background:{bg};color:{ink};font-size:14px;line-height:1.8;overflow-wrap:anywhere">{content}</p>')
             elif pending_role == "reader-tip": blocks.append(f'<blockquote data-role="reader-tip" style="margin:18px 0;padding:14px 16px;background:{bg};border:1px solid {primary}26;border-left:4px solid {accent};border-radius:10px;box-shadow:0 4px 12px {primary}0D;color:{ink};font-size:15px;line-height:1.8">{content}</blockquote>')
             else: blocks.append(f'<blockquote style="margin:20px 0;padding:16px 18px;background:{bg};border:0;border-radius:8px;color:{primary};font-size:15px;line-height:1.8">{content}</blockquote>')
@@ -1227,9 +1258,41 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
         if line.startswith("- "): blocks.append(f'<p style="font-size:16px;line-height:1.75;color:#334E68;margin:6px 0 6px 18px;text-indent:-18px">•　{inline(line[2:],primary)}</p>'); continue
         if re.match(r"^\d+\. ",line): blocks.append(f'<p style="font-size:14px;line-height:1.8;color:#536875;margin:8px 0;overflow-wrap:anywhere">{inline(line,primary)}</p>'); continue
         if line.startswith("**"):
-            if pending_role == "section-label": blocks.append(f'<p data-role="section-label" style="margin:18px 0 6px;color:{ink};font-size:17px;line-height:1.7;font-weight:800;overflow-wrap:anywhere">{inline(line,primary)}</p>')
+            if payload.get("content_type") == "github-hot" and line.startswith("**适合谁？**"):
+                audience_text = re.sub(r"^\*\*适合谁？\*\*\s*", "", line).strip("　 ")
+                audience_line = " · ".join(
+                    person.strip()
+                    for person in re.split(r"[、,，]+", audience_text)
+                    if person.strip()
+                )
+                blocks.append(
+                    f'<section data-role="github-audience" style="margin:18px 0 10px">'
+                    f'<p data-role="github-section-title" style="margin:0 0 8px;color:{ink};font-size:18px;line-height:1.6;font-weight:850;overflow-wrap:anywhere">适合谁？</p>'
+                    f'<p style="margin:0;color:#465C63;font-size:15px;line-height:1.85;overflow-wrap:anywhere">{html.escape(audience_line)}</p>'
+                    f'</section>'
+                )
+            elif payload.get("content_type") == "github-hot" and line.startswith("**项目地址：**"):
+                link_match = re.search(r"\[([^]]+)\]\((https?://[^)]+)\)", line)
+                url = link_match.group(2) if link_match else re.sub(r"^\*\*项目地址：\*\*\s*", "", line).strip()
+                blocks.append(
+                    f'<p data-role="github-project-link" style="margin:8px 0 20px;color:#31474F;'
+                    f'font-size:15px;line-height:1.8;overflow-wrap:anywhere"><strong>项目地址</strong>：'
+                    f'<a href="{html.escape(url)}" style="color:{primary};text-decoration:none;'
+                    f'word-break:break-all;overflow-wrap:anywhere">{html.escape(url)}</a></p>'
+                )
+            elif payload.get("content_type") == "github-hot" and line in {"**它是什么**", "**为什么值得看**"}:
+                label = line.strip("*")
+                blocks.append(f'<p data-role="github-section-title" style="margin:22px 0 8px;color:{ink};font-size:18px;line-height:1.6;font-weight:850;overflow-wrap:anywhere">{html.escape(label)}</p>')
+                pending_role = "github-description-card" if label == "它是什么" else None
+            elif pending_role == "section-label": blocks.append(f'<p data-role="section-label" style="margin:18px 0 6px;color:{ink};font-size:17px;line-height:1.7;font-weight:800;overflow-wrap:anywhere">{inline(line,primary)}</p>')
             else: blocks.append(f'<p style="font-size:15px;line-height:1.85;color:#465C63;margin:7px 0;padding:8px 12px;background:{bg};border-radius:6px;overflow-wrap:anywhere">{inline(line,primary)}</p>')
-            pending_role=None; continue
+            if pending_role != "github-description-card":
+                pending_role=None
+            continue
+        if pending_role == "github-description-card":
+            blocks.append(f'<p data-role="github-description-card" style="font-size:15px;line-height:1.9;color:#31474F;margin:8px 0 18px;padding:14px 18px;background:{bg};border-radius:8px;text-align:justify;overflow-wrap:anywhere">{inline(line,primary)}</p>')
+            pending_role=None
+            continue
         blocks.append(f'<p style="font-size:16px;line-height:1.95;color:#31474F;margin:12px 0;text-align:justify;overflow-wrap:anywhere">{inline(line,primary)}</p>')
     legacy_allowed=payload["status"]=="ready_for_human_review"
     copy_state=copy_state or {"allowed":legacy_allowed,"reason":"legacy","publish_ready":legacy_allowed,"review_counts":{"verified":0,"partial":0,"unverified":0}}

@@ -158,6 +158,7 @@ def build_project(item, index):
     card = item["reader_card"]
     edit = item["editorial"]
     metrics = card["metrics"]
+    category = card.get("category_label") or item.get("category") or "开源项目"
     parts = []
     if metrics.get("language"):
         parts.append(str(metrics["language"]))
@@ -167,6 +168,10 @@ def build_project(item, index):
         parts.append(f"本周 +{metric(metrics['weekly_stars'])}")
     if metrics.get("forks") is not None:
         parts.append(f"{metric(metrics['forks'])} Fork")
+    tags = [category]
+    if metrics.get("weekly_stars") is not None:
+        tags.append(f"本周 +{metric(metrics['weekly_stars'])}")
+    highlights = [str(value).strip() for value in card.get("highlights") or [] if str(value).strip()]
     lines = [
         "<!-- github-project:start -->",
         "",
@@ -174,9 +179,9 @@ def build_project(item, index):
         "",
         f"## {index:02d} · {card.get('name') or item['repo']}",
         "",
-        f"`{card.get('category_label') or item.get('category') or '开源项目'}`",
+        f"<!-- github-tags:{'|'.join(tags)} -->",
         "",
-        f"**描述：** {project_description(item)}",
+        f"> **一句话推荐**　{card.get('recommendation') or edit['use_case']}",
         "",
     ]
     if should_render_project_image(item):
@@ -184,11 +189,13 @@ def build_project(item, index):
     lines.extend([
         f"<!-- github-metrics:{'|'.join(parts)} -->",
         "",
-        f"> **一句话概况**　{card.get('recommendation') or edit['use_case']}",
+        "**它是什么**",
         "",
-        "**重点内容**",
+        project_description(item),
         "",
-        *[f"- {value}" for value in card.get("highlights") or []],
+        "**为什么值得看**",
+        "",
+        f"<!-- github-highlight-row:{'|'.join(highlights)} -->",
         "",
         f"**适合谁？**　{'、'.join(card.get('audience') or [])}",
         "",

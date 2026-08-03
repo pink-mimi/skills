@@ -1,5 +1,8 @@
 import importlib.util
+import base64
 import json
+import re
+import tempfile
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -157,10 +160,12 @@ class GithubHotColumnTests(unittest.TestCase):
     def test_project_uses_approved_editorial_card_order(self):
         article, _, _ = COLUMN.build_article(payload_five())
         positions = [
-            article.index("描述"),
+            article.index("<!-- github-tags:"),
+            article.index("一句话推荐"),
             article.index("项目官方截图"),
-            article.index("一句话概况"),
-            article.index("重点内容"),
+            article.index("github-metrics"),
+            article.index("它是什么"),
+            article.index("为什么值得看"),
             article.index("适合谁"),
             article.index("项目地址"),
         ]
@@ -168,17 +173,54 @@ class GithubHotColumnTests(unittest.TestCase):
 
     def test_project_uses_compact_reader_fields(self):
         article, _, _ = COLUMN.build_article(payload_five())
-        for phrase in ("**描述：**", "**一句话概况**", "**重点内容**", "**适合谁？**", "**项目地址：**"):
+        for phrase in ("<!-- github-tags:", "**一句话推荐**", "**它是什么**", "**为什么值得看**", "**适合谁？**", "**项目地址：**"):
             self.assertIn(phrase, article)
+        self.assertNotIn("\n`AI Agent`\n", article)
+        self.assertIn("<!-- github-tags:AI Agent|本周 +1,700 -->", article)
+        self.assertIn("<!-- github-highlight-row:", article)
+        self.assertNotIn("<!-- github-highlight-row:01 ", article)
         self.assertNotIn("**为什么这周火？**", article)
         self.assertNotIn("**上手条件：**", article)
 
+    def test_github_project_html_matches_compact_card_style(self):
+        article, _, _ = COLUMN.build_article(payload_five())
+        one_pixel_png = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            image_dir = Path(temp_dir)
+            (image_dir / "横版封面.png").write_bytes(one_pixel_png)
+            for image_name in re.findall(r"images/([^)]+)", article):
+                (image_dir / Path(image_name).name).write_bytes(one_pixel_png)
+            html = RENDERING.build_html(
+                article,
+                image_dir,
+                {"content_type": "github-hot", "status": "ready_for_human_review"},
+                "clean-grid",
+            )
+        self.assertIn('data-role="github-tags"', html)
+        self.assertIn("本周 +1,700", html)
+        self.assertIn('data-role="github-section-title"', html)
+        self.assertIn('data-role="github-description-card"', html)
+        self.assertIn('data-role="github-highlight-row"', html)
+        self.assertIn('data-role="github-highlight-chip"', html)
+        self.assertIn('data-role="github-audience"', html)
+        self.assertIn('data-role="github-project-link"', html)
+        self.assertIn("自动化工具用户 · 开发者", html)
+        self.assertNotIn('data-role="github-highlight-card"', html)
+        self.assertNotIn('<strong>适合谁？</strong>\u3000自动化工具用户、开发者', html)
+        self.assertNotIn('<strong>项目地址：</strong>', html)
+        self.assertNotIn('data-role="github-audience-chip"', html)
+        self.assertNotIn('border-top:', html.split('data-role="github-project-link"', 1)[1].split("</section>", 1)[0])
+        self.assertIn("<strong>项目地址</strong>：", html)
+        self.assertNotRegex(html, r'data-role="github-highlight-chip"[^>]*>01\s')
+
     def test_description_uses_github_translated_description_not_editorial_summary(self):
         article, _, _ = COLUMN.build_article(payload_five())
-        self.assertIn("**描述：** 来自 GitHub 的官方项目描述。", article)
-        self.assertIn("> **一句话概况**　一句话推荐：它把复杂工具变成更容易试用的流程。", article)
-        self.assertNotIn("**描述：** Original project description from GitHub.", article)
-        self.assertNotIn("**描述：** 编辑概况：这个项目适合观察自动化流程。", article)
+        self.assertIn("**它是什么**\n\n来自 GitHub 的官方项目描述。", article)
+        self.assertIn("> **一句话推荐**　一句话推荐：它把复杂工具变成更容易试用的流程。", article)
+        self.assertNotIn("**它是什么**\n\nOriginal project description from GitHub.", article)
+        self.assertNotIn("**它是什么**\n\n编辑概况：这个项目适合观察自动化流程。", article)
 
     def test_description_uses_faithful_chinese_translation_instead_of_original_or_recommendation(self):
         payload = payload_five()
@@ -188,11 +230,11 @@ class GithubHotColumnTests(unittest.TestCase):
         payload["items"][0]["reader_card"]["translated_description"] = "ADHD 相关工具、应用、方法和资源清单，面向开发者和创作者整理。"
         article, _, _ = COLUMN.build_article(payload)
         self.assertIn(
-            "**描述：** ADHD 相关工具、应用、方法和资源清单，面向开发者和创作者整理。",
+            "**它是什么**\n\nADHD 相关工具、应用、方法和资源清单，面向开发者和创作者整理。",
             article,
         )
-        self.assertNotIn("**描述：** A curated list of ADHD-specific tools", article)
-        self.assertNotIn("**描述：** 一句话推荐", article)
+        self.assertNotIn("**它是什么**\n\nA curated list of ADHD-specific tools", article)
+        self.assertNotIn("**它是什么**\n\n一句话推荐", article)
 
     def test_project_address_shows_full_github_url(self):
         article, _, _ = COLUMN.build_article(payload_five())
