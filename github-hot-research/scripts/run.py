@@ -626,8 +626,11 @@ def normalize_reader_card(row):
     existing_translation = clean_text(existing.get("translated_description"))
     if is_stale_english_fallback_translation(existing_translation):
         existing_translation = ""
+    row_translation = clean_text(row.get("translated_description"))
+    if is_stale_english_fallback_translation(row_translation):
+        row_translation = ""
     translated_description = clean_text(
-        existing_translation or row.get("translated_description") or translate_description(original_description)
+        existing_translation or row_translation or translate_description(original_description)
     )
     return {
         "category_label": clean_text(existing.get("category_label") or row.get("category")),

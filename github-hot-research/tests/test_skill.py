@@ -236,6 +236,7 @@ class GithubHotResearchTests(unittest.TestCase):
         row = {
             "repo": "ayghri/i-have-adhd",
             "description": "A skill to stop your coding agent from burying the answer. ADHD-friendly output.",
+            "translated_description": "官方描述：A skill to stop your coding agent from burying the answer. ADHD-friendly output.",
             "reader_card": {
                 "original_description": "A skill to stop your coding agent from burying the answer. ADHD-friendly output.",
                 "translated_description": "官方描述：A skill to stop your coding agent from burying the answer. ADHD-friendly output.",
