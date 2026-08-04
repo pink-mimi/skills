@@ -131,6 +131,37 @@ def is_internal_review_text(value: str) -> bool:
     return any(phrase in text for phrase in blocked)
 
 
+INTERNAL_READER_FIELD_MARKERS = ("直接面向读者", "适合重点提示", "适合放在", "适合做", "适合作为", "该条适合", "运营审核", "发布前", "待核验", "补原文", "编辑核对", "复核数字")
+
+
+def has_internal_reader_language(value) -> bool:
+    text = str(value or "")
+    return any(marker in text for marker in INTERNAL_READER_FIELD_MARKERS)
+
+
+def clean_source_label(item: dict) -> str:
+    organization = str(item.get("organization") or "").strip()
+    source = str(item.get("source") or "").strip()
+    label = organization or source or "来源机构"
+    parts=[
+        part.strip()
+        for part in re.split(r"[·•]", label)
+        if part.strip()
+        and part.strip() not in {"滚动", "日期归档", "归档"}
+        and not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", part.strip())
+    ]
+    label = "·".join(parts) if parts else label
+    label = re.sub(r"\s*(?:滚动|日期归档|归档)\s*[:：·•-]?\s*20\d{2}-\d{2}-\d{2}", "", label)
+    return label.strip(" ·•-:：") or "来源机构"
+
+
+def publishable_brief(value) -> str:
+    text = str(value or "").strip()
+    if not text or has_internal_reader_language(text):
+        return "摘要待重写"
+    return text
+
+
 def font(size: int, bold: bool = False):
     candidates = [
         Path("C:/Windows/Fonts/msyhbd.ttc" if bold else "C:/Windows/Fonts/msyh.ttc"),
@@ -614,8 +645,8 @@ def build_daily_news_v2_article(payload: dict):
             continue
         lines += [f"### {label}", ""]
         for item in group_items:
-            source = str(item.get("source") or "来源机构").strip()
-            lines.append(f"- **{item.get('title','')}**：{item.get('brief','')}（{source}）")
+            source = clean_source_label(item)
+            lines.append(f"- **{item.get('title','')}**：{publishable_brief(item.get('brief'))}（{source}）")
         lines.append("")
     focus_ids = list(editorial.get("focus_event_ids") or [])
     focus = [item for event_id in focus_ids for item in items if item.get("event_id") == event_id]
@@ -644,7 +675,7 @@ def build_daily_news_v2_article(payload: dict):
     lines += ["", "## 参考来源", ""]
     for index, item in enumerate(items, 1):
         source_url = item.get("url", "")
-        lines.append(f"{index}. [{item.get('source','原始来源')}：{item.get('title','')}]({source_url})\n   原文地址：{source_url}")
+        lines.append(f"{index}. [{clean_source_label(item)}：{item.get('title','')}]({source_url})\n   原文地址：{source_url}")
     lines += ["", f"> {build_news_notice(items)}", "", "![结尾图](images/结尾图.png)"]
     summary = f"今日简报整理 {len(items)} 条经核验新闻，重点展开 {len(focus)} 条。"
     return "\n".join(lines), title, summary
@@ -1027,7 +1058,7 @@ def build_article(payload: dict):
         lines += ["", "## 参考来源", ""]
         for index,item in enumerate(items,1):
             source_url=item.get("url","")
-            lines.append(f"{index}. [{item.get('source','原始来源')}：{item.get('title','')}]({source_url})\n   原文地址：{source_url}")
+            lines.append(f"{index}. [{clean_source_label(item)}：{item.get('title','')}]({source_url})\n   原文地址：{source_url}")
         lines += ["", f"> {build_news_notice(items)}", "", "![结尾图](images/结尾图.png)"]
         summary = editorial.get("summary") or f"梳理{date_label}值得继续关注的 {len(items)} 条国内新闻，说明发生了什么、为什么重要，以及普通人需要留意什么。"
     else:

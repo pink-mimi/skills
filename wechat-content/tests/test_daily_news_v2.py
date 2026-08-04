@@ -114,6 +114,23 @@ class WechatDailyNewsV2Tests(unittest.TestCase):
         self.assertIn("focus_event_ids", page)
         self.assertFalse(result["manifest"]["copy_allowed"])
 
+    def test_v2_copy_region_rejects_internal_brief_and_hides_collector_source_labels(self):
+        payload = package()
+        payload["items"][0]["brief"] = "直接面向读者的一句话事实摘要，适合重点提示。"
+        payload["items"][0]["source"] = "中国新闻网·滚动·日期归档·2026-08-02"
+        payload["items"][0]["organization"] = ""
+        result = self.build(payload)
+        article = result["article"]
+        page = result["page"]
+
+        self.assertNotIn("直接面向读者", article)
+        self.assertNotIn("适合重点提示", article)
+        self.assertNotIn("滚动·日期归档", article)
+        self.assertIn("中国新闻网", article)
+        button = page.split('<button id="copy-wechat"', 1)[1].split("</button>", 1)[0]
+        self.assertIn("disabled", button)
+        self.assertIn("brief 含内部编辑话术", page)
+
     def test_public_interest_items_are_quick_scan_domestic_not_forced_focus(self):
         payload = package()
         payload["items"].append(

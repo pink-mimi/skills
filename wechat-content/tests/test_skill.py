@@ -816,15 +816,21 @@ class WechatContentTests(unittest.TestCase):
 
     def test_news_article_excludes_internal_language_and_formats_sources(self):
         with tempfile.TemporaryDirectory() as temp:
-            out = self.build("daily-news-content-package.json", temp)
+            fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
+            fixture["items"][0]["source"]="中国新闻网·滚动·日期归档·2026-08-01"
+            fixture["items"][0]["organization"]="中国新闻网"
+            source=Path(temp)/"daily-news-source-label.json"
+            source.write_text(json.dumps(fixture,ensure_ascii=False),encoding="utf-8")
+            out = self.build(source, temp)
             article = (out / "公众号成稿.md").read_text(encoding="utf-8")
             for phrase in ("内容包核验", "人工审核包", "尚未发布"):
                 self.assertNotIn(phrase, article)
+            self.assertNotIn("滚动·日期归档", article)
             self.assertIn("## 参考来源", article)
             self.assertNotIn("## 信息来源与动态说明", article)
             self.assertRegex(
                 article,
-                r"\[官方来源：.+\]\(https://example.com/news\)\n\s+原文地址：https://example.com/news",
+                r"\[中国新闻网：.+\]\(https://example.com/news\)\n\s+原文地址：https://example.com/news",
             )
             page=(out/"微信版.html").read_text(encoding="utf-8")
             source_url=page.split('data-role="source-url"',1)[1].split("</p>",1)[0]

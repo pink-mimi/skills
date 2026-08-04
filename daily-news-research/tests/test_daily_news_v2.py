@@ -123,6 +123,14 @@ class DailyNewsV2Tests(unittest.TestCase):
         self.assertTrue(any("brief" in risk for risk in package["risks"]))
         self.assertTrue(any("focus_event_ids" in risk for risk in package["risks"]))
 
+    def test_internal_brief_language_keeps_v2_package_needs_review(self):
+        rows = [item(index, category) for index, category in enumerate(("politics", "finance", "tech", "public-safety", "society"), 1)]
+        rows[0]["brief"] = "直接面向读者的一句话事实摘要，适合重点提示。"
+        rows[1]["brief"] = "这条新闻适合放在文旅观察位。"
+        package = run.build({"items": rows, "meta": {"successful_organizations": 8}}, datetime.fromisoformat("2026-08-03T06:00:00+08:00"), CONFIG)
+        self.assertEqual(package["status"], "needs_review")
+        self.assertTrue(any("brief 含内部编辑话术" in risk for risk in package["risks"]))
+
 
 if __name__ == "__main__":
     unittest.main()

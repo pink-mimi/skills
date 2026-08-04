@@ -18,7 +18,7 @@ description: Use when 用户需要采集、核验和筛选前一日新闻，查�
 3. 运行一次 `build`，对候选执行北京时间过滤、全国/地方/国际判断、转载识别和事件聚类，默认从更宽的候选池中建立 24—30 条 `verification-queue.json` 和 `editorial-workbench.json`，再择优收束到 8—15 条。
 4. 按类别打开推荐主管部门原文核验，并在工作副本中逐条补齐工作台字段。政策、统计、灾害等级和处罚结果缺少官方原文时不得写成确定性事实。
 5. 国际新闻不再要求必须与中国直接相关，但必须有重大政策、经济、科技、公共安全、地缘变化或广泛社会影响。重要地方新闻必须说明公共影响。普通娱乐、明星动态、综艺内容、常规体育赛果和赛事宣传默认淘汰；只有具备明确全国性公共利益影响时才允许例外进入，并填写 `domestic_relevance: true`、`public_interest_reason` 和重大影响等级。
-6. 补齐必填的 `what_happened`、`editor_note`、`keywords` 和核验状态；只有存在明确公共影响或可执行事项时才填写 `why_it_matters`、`reader_action` 和 `reader_tip`。`reader_tip` 不得包含“发布前”“待核验”“运营者”等内部审核话术。`editorial.article_title` 用于公众号文章标题，`editorial.title` 可保留为内容包归档名称。RSS 摘要不能直接成为发布级内容。
+6. 补齐必填的 `what_happened`、`editor_note`、`keywords` 和核验状态；只有存在明确公共影响或可执行事项时才填写 `why_it_matters`、`reader_action` 和 `reader_tip`。`brief`、`lead`、`reader_tip` 等读者字段不得包含“直接面向读者”“适合重点提示”“适合放在”“发布前”“待核验”“运营者”等内部编辑或审核话术。`editorial.article_title` 用于公众号文章标题，`editorial.title` 可保留为内容包归档名称。RSS 摘要不能直接成为发布级内容。
 7. 将补齐后的 JSON 保存为单独文件，运行 `build --editorial-input <文件>`，再运行 `verify`。
 8. 只有 `content-package.json` 状态为 `ready_for_human_review` 时才能交给 `wechat-content`。仍为 `needs_review` 时不得交给 `wechat-content`，必须继续核验或向用户说明不足。
 
@@ -61,6 +61,6 @@ python scripts/run.py sources --format json
 
 为提高简报丰富度，默认采集池扩大到 150 条候选、核验队列扩大到最多 30 个事件；这只是拓宽发现层，最终仍以核验质量、公共影响和类别多样性决定是否入选。微信、支付宝、交通、考试、公积金、医保、预警服务等与普通生活明确相关的平台或公共服务变化，可归入 `public-interest`/公共服务速览；没有明确影响路径的热搜、奇闻和娱乐话题仍然淘汰。
 
-`content-package.json` 默认使用 daily-news schema v2：每条 `items[]` 必须包含 `event_id`、可直接面向读者的 `brief`、来源、时间、核验状态和 `what_happened`。`brief` 不能直接复制 RSS 摘要。`editorial.focus_event_ids` 只引用 `items[].event_id`，用于从速览池中选出 3—5 条重点，不复制新闻对象。
+`content-package.json` 默认使用 daily-news schema v2：每条 `items[]` 必须包含 `event_id`、可直接面向读者的 `brief`、来源机构、时间、核验状态和 `what_happened`。`brief` 不能直接复制 RSS 摘要，也不能写入“适合重点提示”“适合放在某栏目”等筛选判断；出现这类话术时必须保持 `needs_review`。`editorial.focus_event_ids` 只引用 `items[].event_id`，用于从速览池中选出 3—5 条重点，不复制新闻对象。
 
 国际新闻不再要求必须与中国直接相关，但必须属于重大政策、经济、科技、公共安全、地缘变化或具有广泛社会影响的事件，并填写 `international_impact_reason` 或等价公共影响说明。国际奇闻、空泛口头表态、明星综艺、影视宣传、普通体育赛果和赛事宣传继续默认排除。

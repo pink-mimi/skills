@@ -157,6 +157,12 @@ def _wants_v2(config):
 def _valid_text(value):
     return bool(str(value or "").strip())
 
+INTERNAL_READER_FIELD_MARKERS=("直接面向读者","适合重点提示","适合放在","适合做","适合作为","该条适合","运营审核","发布前","待核验","补原文","编辑核对","复核数字")
+
+def _has_internal_reader_language(value):
+    text=str(value or "")
+    return any(marker in text for marker in INTERNAL_READER_FIELD_MARKERS)
+
 def _auto_brief(row):
     return clean(row.get("brief") or "")
 
@@ -192,6 +198,9 @@ def _validate_v2(package, configured_focus=None):
     missing_brief=[row for row in items if not _valid_text(row.get("brief"))]
     if missing_brief:
         risks.append(f"{len(missing_brief)} 条新闻缺少 brief")
+    internal_brief=[row for row in items if _has_internal_reader_language(row.get("brief"))]
+    if internal_brief:
+        risks.append(f"{len(internal_brief)} 条新闻 brief 含内部编辑话术")
     unverified=[row for row in items if row.get("verification_status") not in {"verified","partial"}]
     if unverified:
         risks.append(f"{len(unverified)} 条新闻关键事实未核验")

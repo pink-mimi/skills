@@ -21,6 +21,12 @@ from news_visuals import choose_news_visual, valid_live_pair
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_VERSION = "3.1.0"
 NEWS_REQUIRED_FIELDS = ("what_happened", "keywords")
+INTERNAL_READER_FIELD_MARKERS = ("直接面向读者", "适合重点提示", "适合放在", "适合做", "适合作为", "该条适合", "运营审核", "发布前", "待核验", "补原文", "编辑核对", "复核数字")
+
+
+def has_internal_reader_language(value) -> bool:
+    text = str(value or "")
+    return any(marker in text for marker in INTERNAL_READER_FIELD_MARKERS)
 
 
 def load(path: Path) -> dict:
@@ -170,10 +176,13 @@ def copy_eligibility(payload: dict) -> dict:
         ids={item.get("event_id") for item in payload.get("items",[])}
         focus=list((payload.get("editorial") or {}).get("focus_event_ids") or [])
         missing_brief=[item for item in payload.get("items",[]) if not item.get("brief")]
+        internal_brief=[item for item in payload.get("items",[]) if has_internal_reader_language(item.get("brief"))]
         invalid_focus=len(focus)!=len(set(focus)) or any(event_id not in ids for event_id in focus)
         reasons=[]
         if missing_brief:
             reasons.append(f"{len(missing_brief)} 条新闻缺少 brief")
+        if internal_brief:
+            reasons.append(f"{len(internal_brief)} 条新闻 brief 含内部编辑话术")
         if invalid_focus:
             reasons.append("focus_event_ids 存在重复或引用不存在的事件")
         reasons += [risk for risk in risks if ("brief" in risk or "focus_event_ids" in risk) and risk not in reasons]
