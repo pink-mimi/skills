@@ -232,6 +232,24 @@ class GithubHotResearchTests(unittest.TestCase):
                 self.assertNotIn("官方描述：", translated)
                 self.assertTrue(RUN.contains_cjk(translated))
 
+    def test_translate_description_covers_2026_08_27_weekly_projects(self):
+        examples = {
+            "Community plugin marketplace for Claude Cowork and Claude Code. Read-only mirror — submit plugins at clau.de/plugin-directory-submission.": "Claude Cowork 和 Claude Code 的社区插件市场。当前仓库是只读镜像，插件提交需要到 clau.de/plugin-directory-submission 完成。",
+            "⚡️A native, local-first alternative to Logitech Options+, written in Rust 🦀 — remap buttons, DPI, and SmartShift over HID++. No account, no telemetry.": "用 Rust 编写的本地优先 Logitech Options+ 替代工具，可通过 HID++ 重映射按键、DPI 和 SmartShift；不需要账号，也不收集遥测数据。",
+            "The Modular Platform (includes MAX & Mojo)": "Modular 平台，包含 MAX 与 Mojo。",
+            "Beautiful, Modern & Opinionated Linux": "一个美观、现代且带有明确取舍的 Linux 桌面环境/发行配置项目。",
+            "Apache Maka (Incubating) is a local-first AI agent workspace. Model messages, tool calls, tool results, permission decisions, and termination events are recorded as an append-only log.": "Apache Maka（孵化中）是一个本地优先的 AI Agent 工作区，会把模型消息、工具调用、工具结果、权限决策和终止事件记录为只追加日志。",
+            "Lightweight coding agent that runs in your terminal": "在终端中运行的轻量级编码智能体。",
+            "local multi-agent harness": "本地多智能体运行 Harness。",
+            "Cursor plugin specification and official plugins": "Cursor 插件规范与官方插件仓库。",
+        }
+        for source, expected in examples.items():
+            with self.subTest(source=source):
+                translated = RUN.translate_description(source)
+                self.assertEqual(translated, expected)
+                self.assertNotIn("官方描述：", translated)
+                self.assertTrue(RUN.contains_cjk(translated))
+
     def test_normalize_reader_card_refreshes_stale_english_fallback_translation(self):
         row = {
             "repo": "ayghri/i-have-adhd",

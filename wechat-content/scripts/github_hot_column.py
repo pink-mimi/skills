@@ -77,15 +77,37 @@ def closing_detail(payload, observations):
     )
 
 
+def contains_cjk(value):
+    return bool(re.search(r"[\u4e00-\u9fff]", str(value or "")))
+
+
+def stale_official_english_fallback(value):
+    text = str(value or "").strip()
+    if not text.startswith("官方描述："):
+        return False
+    body = text.removeprefix("官方描述：").strip()
+    return bool(body) and not contains_cjk(body)
+
+
 def project_description(item):
     card = item.get("reader_card") or {}
-    return str(
-        card.get("translated_description")
-        or item.get("translated_description")
-        or item.get("description")
-        or card.get("summary")
-        or ""
-    ).strip()
+    fallback = ""
+    for value in (
+        card.get("translated_description"),
+        item.get("translated_description"),
+        item.get("description"),
+        card.get("summary"),
+    ):
+        text = str(value or "").strip()
+        if not text:
+            continue
+        if stale_official_english_fallback(text):
+            fallback = fallback or "项目官方描述需要发布前补充中文翻译。"
+            continue
+        if contains_cjk(text):
+            return text
+        fallback = fallback or text
+    return fallback
 
 
 def build_title(payload):
@@ -97,43 +119,24 @@ def build_title(payload):
 
 def build_opening_variants(payload):
     editorial = payload.get("editorial") or {}
-    items = payload["items"]
     routes = route_phrase(payload)
-    if editorial.get("opening_mode") == "theme" and editorial.get("theme_evidence"):
-        first = [
-            f"这周的 GitHub 热榜，不像一次技术秀，更像一张开发者压力清单：{routes or editorial.get('weekly_theme') or '工具、资料和工作流'}这几条路线同时冒头。",
-            "Star 把它们推到眼前，但真正值得看的，是这些项目分别在替开发者省掉哪一段麻烦。",
-            "往下看时，可以先问三个问题：哪个今晚能试，哪个值得慢慢学，哪个可能变成下一类工具入口。",
-        ]
-        return [
-            first,
-            [
-                f"本周开源雷达扫到的不是单一风口，而是几条工作路线的重新排布：{routes or editorial.get('weekly_theme') or '工具、资料和工作流'}。",
-                "有些项目在压缩信息噪音，有些在把复杂流程变成工具，还有些在替开发者补上一块长期缺口。",
-                "热榜只是把它们照亮，真正的价值要看它们能不能在具体场景里少绕路。",
-            ],
-            [
-                "这一期 GitHub 热门有个明显信号：开源正在从“给你一套代码”，继续往“替你压缩一段工作流”靠近。",
-                f"{routes or editorial.get('weekly_theme') or '这些坐标'}被放在同一张榜上，不是因为它们相似，而是因为它们都在把某个麻烦变小。",
-                "如果时间有限，别急着全收藏，先挑一个能试、一个能学、一个和当前工作最贴近的坐标。",
-            ],
-        ]
+    route_text = routes or editorial.get("weekly_theme") or "工具、资料和工作流"
     first = [
-        f"这周的 GitHub 热榜，不像一次技术秀，更像一张开发者压力清单：{routes}这几条路线同时冒头。",
-        "Star 把它们推到眼前，但真正值得看的，是这些项目分别在替开发者省掉哪一段麻烦。",
-        "往下看时，可以先问三个问题：哪个今晚能试，哪个值得慢慢学，哪个可能变成下一类工具入口。",
+        f"这周的 GitHub 热榜有点像周末市集：{route_text}这些摊位挤在一起，有的摆出新工具，有的把老问题重新翻出来。",
+        "热闹归热闹，真正值得停下来的，不是名字最响的项目，而是你一看 README 就能明白：它到底替我省了哪一步。",
+        "这一期先按用途逛一圈：今晚能试的先拿走，值得系统看的记一笔，暂时用不上的留个坐标。",
     ]
     return [
         first,
         [
-            f"本周开源雷达扫到的不是单一风口，而是几条工作路线的重新排布：{routes}。",
-            "有些项目在压缩信息噪音，有些在把复杂流程变成工具，还有些在替开发者补上一块长期缺口。",
-            "热榜只是把它们照亮，真正的价值要看它们能不能在具体场景里少绕路。",
+            f"本周开源雷达扫到一排刚开张的摊位：{route_text}这些路线依次亮出来，热闹但不需要全都带走。",
+            "真正值得多看两眼的，是能把一个具体麻烦说清楚，并让你知道下一步该怎么试的项目。",
+            "读的时候可以轻一点：今晚能试就试一下，值得系统看就留给周末，暂时用不上就收藏备用。",
         ],
         [
-            "这一期 GitHub 热门有个明显信号：开源正在从“给你一套代码”，继续往“替你压缩一段工作流”靠近。",
-            f"{routes}被放在同一张榜上，不是因为它们相似，而是因为它们都在把某个麻烦变小。",
-            "如果时间有限，别急着全收藏，先挑一个能试、一个能学、一个和当前工作最贴近的坐标。",
+            "这一期 GitHub 热门不像一条整齐的主线，更像开发者把近期遇到的麻烦摆到同一张桌上。",
+            f"{route_text}放在一起，不是因为它们相似，而是因为它们各自给出了一条可以继续追的路线。",
+            "先逛一圈就好：眼前用得上的马上试，可能改变工作流的系统看，暂时离得远的留个坐标。",
         ],
     ]
 
@@ -207,51 +210,43 @@ def build_project(item, index):
 
 
 def build_closing_variants(payload):
-    editorial = payload.get("editorial") or {}
-    observations = editorial.get("closing_observations") or []
     categories = "、".join(top_categories(payload)) or "这些方向"
-    routes = route_phrase(payload)
-    lead = (
-        f"把这 {len(payload.get('items') or [])} 个项目放在一起看，共同变化不是 Star 同时上涨，"
-        f"而是{routes}都在把一段工作流压短。"
-    )
-    detail = closing_detail(payload, observations)
     first = [
-        "## 最后，热榜会刷新，问题不会",
+        "## 最后，先问它离你有多近",
         "",
-        lead,
+        f"这 {len(payload.get('items') or [])} 个项目落在{categories}这些方向上，不需要一次看完。比起全收藏，更实用的是先判断它解决的问题离你有多近。",
         "",
-        detail,
+        "现在就会遇到的问题，可以今晚试一下，打开 README 看安装和示例，十分钟内判断它是不是你的工具。",
         "",
-        "如果只带走三个位置，可以先留一个马上试用的工具，再留一个能系统补课的资料，最后留一个和当前工作最接近的项目。这样收藏不是把链接埋起来，而是给下一次卡住时留一条路。",
+        "未来可能遇到的问题，值得系统看，也适合收藏备用到对应资料夹；等同类麻烦出现时，再回来翻这个坐标。",
         "",
-        "> Star 会涨会跌，真正有用的项目，会在你需要时再次亮起来。",
+        "与自己无关的问题，就让它继续留在热榜里发光。少一点收藏压力，也是一种效率。",
         "",
         "![结尾图](images/结尾图.png)",
     ]
     second = [
-        "## 最后，热榜会刷新，问题不会",
+        "## 最后，别让收藏夹替你焦虑",
         "",
-        f"本周突然升温的数字会慢慢回落，但{categories}背后的需求不会因此消失。",
+        f"{categories}这些方向都值得看，但不一定都值得今天安装。先问它和你的问题有多近。",
         "",
-        detail,
+        "现在就会遇到的，今晚能试就试；能立刻省事的项目，不需要等到周末。",
         "",
-        "如果你只准备留下三个位置，可以先选一个马上试用，验证它是不是真的省事；再选一个系统补课，补一块长期会用到的能力；最后选一个和当前工作最接近的问题，让收藏夹不只是收藏夹。",
+        "未来可能遇到的，值得系统看，慢慢读 README、示例和限制条件。",
         "",
-        "> 热榜记录速度，下一次打开时仍有用，才算真的留下来。",
+        "与自己无关的，收藏备用也可以，但别让它占用今天的注意力。",
         "",
         "![结尾图](images/结尾图.png)",
     ]
     third = [
-        "## 最后，热榜会刷新，问题不会",
+        "## 最后，把热闹放回问题里",
         "",
-        f"把这些项目留在同一期，不是因为它们拥有相似的数字，而是因为它们分别落在{categories}这些坐标上。",
+        f"这一期的项目分别落在{categories}这些坐标上，适合用问题距离来判断先后顺序。",
         "",
-        detail,
+        "现在就会遇到的，今晚能试就打开；哪怕只跑通一个示例，也比空收藏更有用。",
         "",
-        "时间有限时，不妨只挑三个：一个马上试用，一个系统补课，一个和当前工作最接近。这样热榜就不会只是一串数字，而会变成下周还能继续打开的线索。",
+        "未来可能遇到的，留给需要补能力的时候系统看，也可以先收藏备用。",
         "",
-        "> 地图会更新，真正值得抵达的地方，会在你需要它时再次亮起来。",
+        "与自己无关的，暂时放过它。热榜每天都很忙，你不用替每个项目安排归宿。",
         "",
         "![结尾图](images/结尾图.png)",
     ]
