@@ -2,7 +2,7 @@ import hashlib, json, shutil, subprocess, sys, tempfile, unittest
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageDraw
 
 SKILL=Path(__file__).resolve().parents[1]
 ASSETS=SKILL/"assets"
@@ -189,6 +189,8 @@ class WechatContentTests(unittest.TestCase):
             self.assertIn(phrase,docs)
         for phrase in ("编辑卡片式","动态开头","动态结尾","品牌稳定、主题半动态","不依赖 `wechat-article-writer`"):
             self.assertIn(phrase,docs)
+        for phrase in ("开源夜市", "无字主视觉", "长封面", "方形封面", "本地脚本叠加准确中文", "共享同一行视觉中心线"):
+            self.assertIn(phrase, docs)
 
     def test_valid_live_images_are_used_and_recorded(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -584,6 +586,32 @@ class WechatContentTests(unittest.TestCase):
             manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["cover_image_mode"], "live_image2")
             self.assertEqual(manifest["image_mode"], "template_fallback")
+
+    def test_github_image2_cover_uses_wechat_upload_layout_without_white_card(self):
+        with tempfile.TemporaryDirectory() as temp:
+            generated = Path(temp) / "image2"
+            generated.mkdir(parents=True)
+            cover = Image.new("RGB", (1600, 900), (4, 18, 30))
+            draw = ImageDraw.Draw(cover)
+            for index, x in enumerate(range(760, 1500, 80)):
+                color = (20, 210, 230) if index % 2 else (255, 130, 50)
+                draw.rounded_rectangle((x, 120 + (index % 4) * 90, x + 58, 175 + (index % 4) * 90), 12, fill=color)
+            cover.save(generated / "cover.png")
+
+            out = self.build(
+                "github-hot-content-package-v2.json",
+                temp,
+                extra=["--image-input-dir", str(generated), "--image-mode", "auto"],
+            )
+
+            with Image.open(out / "images/横版封面.png") as wide:
+                self.assertEqual(wide.size, (900, 383))
+                self.assertLess(max(wide.convert("RGB").getpixel((70, 40))), 220)
+                self.assertGreater(wide.convert("RGB").getpixel((65, 286))[0], 180)
+            with Image.open(out / "images/方形封面.png") as square:
+                self.assertEqual(square.size, (383, 383))
+                self.assertLess(max(square.convert("RGB").getpixel((42, 40))), 220)
+                self.assertGreater(square.convert("RGB").getpixel((60, 282))[0], 180)
 
     def test_github_missing_image2_uses_tech_radar_cover_fallback(self):
         with tempfile.TemporaryDirectory() as temp:

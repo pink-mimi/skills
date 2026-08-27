@@ -231,11 +231,104 @@ def draw_grid(draw, box, color, step=48):
         draw.line((x0, y, x1, y), fill=color, width=1)
 
 
+def draw_centered_text(draw, box, text, text_font, fill):
+    left, top, right, bottom = box
+    bbox = draw.textbbox((0, 0), text, font=text_font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+    x = left + (right - left - text_width) / 2 - bbox[0]
+    y = top + (bottom - top - text_height) / 2 - bbox[1] - 1
+    draw.text((x, y), text, font=text_font, fill=fill)
+
+
+def draw_centerline_text(draw, x, center_y, text, text_font, fill):
+    bbox = draw.textbbox((0, 0), text, font=text_font)
+    text_height = bbox[3] - bbox[1]
+    y = center_y - text_height / 2 - bbox[1] - 1
+    draw.text((x, y), text, font=text_font, fill=fill)
+
+
+def add_github_cover_veil(image, strength=225, width_ratio=0.8):
+    width, height = image.size
+    veil = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    veil_draw = ImageDraw.Draw(veil)
+    limit = max(1, int(width * width_ratio))
+    for x in range(limit):
+        alpha = int(strength * (1 - x / limit) ** 1.15)
+        veil_draw.line((x, 0, x, height), fill=(2, 9, 15, alpha))
+    for y in range(height):
+        edge_alpha = int(36 * (1 - abs(y - height / 2) / (height / 2)) ** 1.8)
+        veil_draw.line((0, y, width, y), fill=(0, 0, 0, edge_alpha))
+    return Image.alpha_composite(image.convert("RGBA"), veil)
+
+
+def github_square_title_lines(title):
+    compact = re.sub(r"\s+", "", str(title or ""))
+    if "开源夜市" in compact:
+        count = re.search(r"(\d+)", compact)
+        return ["开源夜市", f"本周 {count.group(1)} 个新坐标" if count else "本周开源新坐标"]
+    if "GitHub" in compact and len(compact) > 10:
+        compact = compact.replace("这周GitHub，", "").replace("本周GitHub", "GitHub")
+    return [compact]
+
+
+def github_image2_cover_panel(size, title, kicker, base_path, square=False):
+    centering = (0.74, 0.5) if square else (0.5, 0.5)
+    with Image.open(base_path) as source:
+        image = ImageOps.fit(source.convert("RGB"), size, method=Image.Resampling.LANCZOS, centering=centering)
+    image = add_github_cover_veil(image, strength=190 if square else 225, width_ratio=0.82 if square else 0.74)
+    draw = ImageDraw.Draw(image)
+    orange = "#FF8B3E"
+    cyan = "#81E2E9"
+    white = "#F0FAFB"
+
+    if square:
+        left = 30
+        draw.text((left, 34), "GitHub 热门", font=font(23, True), fill=orange)
+        lines = github_square_title_lines(title)
+        if len(lines) >= 2:
+            draw.text((left, 84), lines[0], font=font(43, True), fill=white)
+            draw.text((left, 139), lines[1], font=font(28, True), fill=white)
+        else:
+            fitted, title_font = fit_cover_title(draw, lines[0], 310, max_lines=2, preferred_size=39, minimum_size=24)
+            y = 86
+            for line in fitted[:2]:
+                draw.text((left, y), line, font=title_font, fill=white)
+                y += 48
+        bar_y = 202
+        draw.rounded_rectangle((left, bar_y, left + 88, bar_y + 5), radius=3, fill=orange)
+        draw.rounded_rectangle((left + 100, bar_y, left + 212, bar_y + 5), radius=3, fill="#1FCDDCF0")
+        chip = (left, 264, left + 118, 300)
+        draw.rounded_rectangle(chip, radius=18, fill="#FF7F37")
+        draw_centered_text(draw, chip, "未完地图", font(19, True), "#FFFFFF")
+        draw.text((left, 312), "保持好奇，少走弯路", font=font(18), fill=cyan)
+        return image.convert("RGB")
+
+    left = 54
+    draw.text((left, 52), kicker, font=font(26, True), fill=orange)
+    title_lines, title_font = fit_cover_title(draw, title, 510, max_lines=2, preferred_size=49, minimum_size=31)
+    y = 112
+    for line in title_lines[:2]:
+        draw.text((left - 2, y), line, font=title_font, fill=white)
+        y += 62
+    bar_y = 254
+    draw.rounded_rectangle((left, bar_y, left + 110, bar_y + 5), radius=3, fill=orange)
+    draw.rounded_rectangle((left + 122, bar_y, left + 296, bar_y + 5), radius=3, fill="#1FCDDCF0")
+    chip = (left, 284, left + 134, 320)
+    center_y = (chip[1] + chip[3]) / 2
+    draw.rounded_rectangle(chip, radius=18, fill="#FF7F37")
+    draw_centered_text(draw, chip, "未完地图", font(20, True), "#FFFFFF")
+    draw_centerline_text(draw, left + 158, center_y, "保持好奇，少走弯路", font(20), cyan)
+    return image.convert("RGB")
+
+
 def cover_panel(size, title, kicker, palette, square=False, base_path=None):
     bg, ink, primary, accent = palette
     github_cover = "GitHub" in str(kicker)
     ai_cover = "AI 新发现" in str(kicker)
     has_base = bool(base_path and Path(base_path).exists())
+    if github_cover and has_base:
+        return github_image2_cover_panel(size, title, kicker, Path(base_path), square=square)
     if base_path and Path(base_path).exists():
         centering = (0.34, 0.5) if square else (0.5, 0.5)
         with Image.open(base_path) as source:
