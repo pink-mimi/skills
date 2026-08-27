@@ -266,13 +266,35 @@ class WechatContentTests(unittest.TestCase):
             self.assertIn('id="copy-wechat"', page)
             self.assertIn('id="wechat-content"', page)
             self.assertIn("AI 新发现审核台", page)
-            self.assertIn("本期发现：Atlas Agent Studio", article)
-            self.assertIn("一、它解决什么问题", article)
-            self.assertIn("三、三个普通人能理解的使用场景", article)
-            self.assertIn("五、注册、地区、语言和设备门槛", article)
-            self.assertIn("九、官方地址和资料来源", article)
+            self.assertIn("它是什么：Atlas Agent Studio", article)
+            self.assertIn("最值得看的一点：", article)
+            self.assertIn("适合谁：内容运营者、自动化工作流用户、小团队负责人", article)
+            self.assertIn("怎么开始：", article)
+            self.assertIn("先注意什么：", article)
+            self.assertIn("一、GPT-Live 是什么", article.replace("Atlas Agent Studio", "GPT-Live"))
+            self.assertIn("二、主要功能", article)
+            self.assertIn("三、怎么使用", article)
+            self.assertIn("四、适合哪些场景", article)
+            self.assertNotIn("三个普通人能理解的使用场景", article)
+            self.assertNotIn("谁适合用", article)
+            self.assertNotIn("谁暂时不需要", article)
+            self.assertNotIn("暂时不需要", article)
+            self.assertIn("五、费用和地区限制", article)
+            self.assertIn("七、项目地址和资料来源", article)
+            self.assertIn("官方发布页", article)
+            self.assertIn("https://example.com/atlas-agent-studio", article)
+            self.assertNotIn("核验时间", article)
+            self.assertNotIn("官方示例图", article)
             self.assertNotIn("## 02｜", article)
-            self.assertIn("未做亲身体验", article)
+            self.assertNotIn("未做亲身体验", article)
+            self.assertNotIn("人工审核", article)
+            self.assertNotIn("人工", article)
+            self.assertNotIn("发布前请", article)
+            self.assertNotIn("发布前", article)
+            self.assertNotIn("verification_status", article)
+            self.assertNotIn("核验状态", article)
+            self.assertIn("继续沿着这条线索看", article)
+            self.assertIn("点赞关注不迷路", article)
             self.assertNotIn("我试了", article)
             self.assertTrue((out / "images/合并封面.png").exists())
             self.assertTrue((out / "images/横版封面.png").exists())
@@ -282,16 +304,72 @@ class WechatContentTests(unittest.TestCase):
             self.assertTrue(manifest["copy_allowed"])
             self.assertFalse(manifest["publish_ready"])
 
+    def test_ai_discovery_uses_verified_official_image_when_available(self):
+        payload = json.loads((SKILL / "tests/fixtures/ai-discovery-content-package.json").read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as temp:
+            official = Path(temp) / "official-demo.png"
+            self.write_png(official, (64, 120, 210))
+            payload["items"][0]["official_images"] = [
+                {
+                    "url": "https://example.com/atlas-agent-studio/demo.png",
+                    "source_page": "https://example.com/atlas-agent-studio",
+                    "source_path": str(official),
+                    "description": "官方产品演示图",
+                    "usage_status": "approved",
+                    "verification_status": "verified",
+                    "is_official": True,
+                }
+            ]
+            source = Path(temp) / "ai-official-image.json"
+            source.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            out = self.build(source, temp)
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
+            self.assertIn("![官方示例图](images/官方示例-01.png)", article)
+            self.assertTrue((out / "images/官方示例-01.png").exists())
+            self.assertEqual(manifest["official_images"][0]["image_mode"], "official_verified")
+
+    def test_ai_discovery_rejects_third_party_image_as_official(self):
+        payload = json.loads((SKILL / "tests/fixtures/ai-discovery-content-package.json").read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as temp:
+            third_party = Path(temp) / "third-party.png"
+            self.write_png(third_party, (220, 90, 90))
+            payload["items"][0]["official_images"] = [
+                {
+                    "url": "https://ai-bot.cn/example.png",
+                    "source_page": "https://ai-bot.cn/gpt-live/",
+                    "source_path": str(third_party),
+                    "description": "第三方介绍页图片",
+                    "usage_status": "approved",
+                    "verification_status": "verified",
+                    "is_official": False,
+                }
+            ]
+            source = Path(temp) / "ai-third-party-image.json"
+            source.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            out = self.build(source, temp)
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            manifest = json.loads((out / "render-manifest.json").read_text(encoding="utf-8"))
+            self.assertNotIn("官方示例图", article)
+            self.assertFalse((out / "images/官方示例-01.png").exists())
+            self.assertNotIn("official_images", manifest)
+
     def test_ai_discovery_does_not_claim_testing_without_evidence(self):
         payload = json.loads((SKILL / "tests/fixtures/ai-discovery-content-package.json").read_text(encoding="utf-8"))
         payload["items"][0]["tested"] = True
         payload["items"][0]["evidence"] = []
+        payload["items"][0]["supports_chinese"] = "中文表现发布前仍建议人工试用确认。"
+        payload["items"][0]["risks"] = ["涉及关键事实时需要人工核验。"]
         with tempfile.TemporaryDirectory() as temp:
             source = Path(temp) / "ai-no-test-evidence.json"
             source.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
             out = self.build(source, temp)
             article = (out / "公众号成稿.md").read_text(encoding="utf-8")
-            self.assertIn("未提供可追溯的实测记录", article)
+            self.assertIn("公开资料显示", article)
+            self.assertNotIn("未提供可追溯的实测记录", article)
+            self.assertNotIn("未做亲身体验", article)
+            self.assertNotIn("发布前", article)
+            self.assertNotIn("人工", article)
             self.assertNotIn("已记录实际试用信息", article)
 
     def github_v2_fixture(self):

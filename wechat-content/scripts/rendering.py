@@ -335,8 +335,12 @@ def body_card(size, item, index, content_type, palette):
     label = {"daily-news": "昨日坐标", "ai-discovery": "AI 坐标"}.get(content_type, "开源坐标")
     draw.text((96, 86), f"{index:02d}", font=font(25, True), fill="#FFFFFF")
     draw.text((234, 84), label, font=font(27, True), fill=primary)
-    title = item.get("title") or item.get("repo") or "待确认内容"
-    subtitle = item.get("summary") or item.get("description") or ""
+    if content_type == "ai-discovery":
+        title = item.get("name") or item.get("title") or "AI 新发现"
+        subtitle = item.get("use_case") or item.get("recommendation") or item.get("summary") or ""
+    else:
+        title = item.get("title") or item.get("repo") or "待确认内容"
+        subtitle = item.get("summary") or item.get("description") or ""
     draw.text((76, 182), shorten(title, 27), font=font(42, True), fill=ink)
     draw.multiline_text((76, 255), shorten(subtitle, 58), font=font(25), fill="#536871", spacing=12)
     cx, cy = width - 230, 395
@@ -358,7 +362,7 @@ def body_card(size, item, index, content_type, palette):
             draw.line((cx + offset // 2, cy + 125, cx + offset, cy + 175), fill=accent, width=7)
             draw.ellipse((cx + offset - 9, cy + 166, cx + offset + 9, cy + 184), fill=accent)
     category_names = {"society": "社会民生", "politics": "时政", "finance": "财经", "technology": "科技", "international": "国际", "sports": "体育", "culture": "文化"}
-    category = category_names.get(item.get("category"), item.get("category")) or (item.get("license") if content_type == "github-hot" else "值得继续关注")
+    category = category_names.get(item.get("category"), item.get("category")) or (item.get("type") if content_type == "ai-discovery" else item.get("license") if content_type == "github-hot" else "值得继续关注")
     draw.rounded_rectangle((76, height - 117, 420, height - 72), 22, fill="#EDF6F7")
     draw.text((96, height - 108), shorten(category, 18), font=font(20, True), fill=primary)
     return image
@@ -389,6 +393,22 @@ def normalize_project_image(source: Image.Image, size=(1200, 675)) -> Image.Imag
     y = (size[1] - image.height) // 2
     canvas.paste(image, (x, y))
     return canvas
+
+
+def ai_official_image_candidate(item: dict) -> dict:
+    for image in item.get("official_images") or []:
+        if not isinstance(image, dict):
+            continue
+        if image.get("is_official") is not True:
+            continue
+        if image.get("usage_status") not in {"approved", "verified"}:
+            continue
+        if image.get("verification_status") not in {"verified", "approved"}:
+            continue
+        source_path = image.get("source_path") or image.get("cache_path") or image.get("file")
+        if source_path and Path(str(source_path)).is_file():
+            return {**image, "source_path": str(source_path)}
+    return {}
 
 
 def github_topic_card(size, payload, index, palette):
@@ -544,13 +564,32 @@ def render_images(
             else:
                 github_topic_card((1200, 675), payload, index, palette).save(directory / f"主题插图-{index:02d}.png", optimize=True)
     else:
+        official_records = []
         for index, item in enumerate(payload["items"], 1):
-            body_card((1200, 675), item, index, payload["content_type"], palette).save(directory / f"AI发现-{index:02d}.png", optimize=True)
+            official_image = ai_official_image_candidate(item)
+            if official_image:
+                target = directory / f"官方示例-{index:02d}.png"
+                with Image.open(official_image["source_path"]) as source:
+                    normalize_project_image(source).save(target, optimize=True)
+                official_records.append(
+                    {
+                        "rank": index,
+                        "image_mode": "official_verified",
+                        "file": f"images/{target.name}",
+                        "url": official_image.get("url") or "",
+                        "source_page": official_image.get("source_page") or "",
+                        "description": official_image.get("description") or "官方示例图",
+                    }
+                )
+            else:
+                body_card((1200, 675), item, index, payload["content_type"], palette).save(directory / f"AI发现-{index:02d}.png", optimize=True)
+        if official_records:
+            payload["_official_images"] = official_records
     ending_card((1200, 675), payload["content_type"], palette).save(directory / "结尾图.png", optimize=True)
     if payload["content_type"] == "daily-news":
         return visual.get("image_mode", "weekday_fallback") if visual else "template"
     if payload["content_type"] == "ai-discovery":
-        return "ai_discovery_template"
+        return "official_verified" if payload.get("_official_images") else "ai_discovery_template"
     return "template_fallback"
 
 
@@ -823,6 +862,49 @@ def pricing_text(item: dict) -> str:
     return "；".join(str(part).strip() for part in parts if str(part).strip()) or str(item.get("pricing") or "待核验")
 
 
+def reader_clean_text(value: str) -> str:
+    text = str(value or "").strip()
+    replacements = {
+        "发布前请重新打开官方价格页确认": "具体价格以官方页面为准",
+        "发布前请": "建议",
+        "发布前": "实际使用前",
+        "发布前继续复核": "使用前继续核对",
+        "发布前复核": "使用前核对",
+        "发布前确认": "使用前确认",
+        "人工试用确认": "自己试用确认",
+        "人工核验": "用可靠来源核对",
+        "仍需人工复核": "仍需以官方说明为准",
+        "需人工复核": "需以官方说明为准",
+        "需要人工复核": "需要以官方说明为准",
+        "人工复核": "以官方说明为准",
+        "待核验": "以官方说明为准",
+        "价格核验时间": "价格更新时间",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def concise_pricing_text(item: dict) -> str:
+    details = item.get("pricing_details") or {}
+    if not isinstance(details, dict):
+        base = reader_clean_text(item.get("pricing") or "费用以官方页面为准")
+        return f"{base}；具体额度、币种和自动续费规则以官方价格页为准。"
+    parts = []
+    for key in ("free", "free_quota", "lowest_paid_price", "subscription"):
+        value = reader_clean_text(details.get(key) or "")
+        if value and value not in parts:
+            parts.append(value)
+    paid_only = text_list(details.get("paid_only_features"))
+    if paid_only:
+        parts.append("付费档位通常包含" + "、".join(paid_only[:3]))
+    if not parts:
+        parts.append(reader_clean_text(item.get("pricing") or "费用以官方页面为准"))
+    parts = parts[:3]
+    parts.append("具体额度、币种和自动续费规则以官方价格页为准")
+    return "；".join(parts) + "。"
+
+
 def verification_text(item: dict) -> str:
     grade = item.get("verification_grade") or "待分级"
     status = item.get("verification_status") or "unverified"
@@ -842,8 +924,7 @@ def source_lines(item: dict) -> list[str]:
     for index, source in enumerate(sources, 1):
         name = source.get("name") or f"资料来源 {index}"
         url = source.get("url") or item.get("official_url") or ""
-        verified_at = source.get("verified_at") or "未记录核验时间"
-        lines.append(f"{index}. [{name}]({url})\n   核验时间：{verified_at}")
+        lines.append(f"{index}. {name}\n   {url}")
     return lines
 
 
@@ -853,103 +934,104 @@ def build_ai_discovery_article(payload: dict):
     name = item.get("name") or "本期 AI 新发现"
     title = editorial.get("title") or f"AI 新发现：{name} 能帮谁少绕路？"
     audience = text_list(item.get("audience"), ["对 AI 工具有实际需求的读者"])
-    not_for = text_list(item.get("not_for"), ["暂时没有相关场景的读者"])
     scenarios = text_list(item.get("scenarios"), ["资料整理", "流程拆解", "重复任务辅助"])[:3]
-    risks = text_list(item.get("risks"), ["发布前继续复核隐私、费用、版权和可用地区"])
+    risks = [reader_clean_text(value) for value in text_list(item.get("risks"), ["使用前继续核对隐私、费用、版权和可用地区"])]
     privacy = text_list(item.get("privacy_and_rights"), risks)
     feedback = text_list(item.get("public_feedback"), ["公开反馈有限，本文主要依据官方资料整理"])
-    has_test_evidence = bool(item.get("tested") and (item.get("experience_notes") or item.get("test_notes") or item.get("evidence")))
-    if has_test_evidence:
-        test_boundary = "已有可追溯的试用记录，但本文仍按资料核验口径写作，发布前请人工复核。"
-    elif item.get("tested"):
-        test_boundary = "内容包标记为已测试，但未提供可追溯的实测记录；正文只按公开资料整理，不写亲身体验。"
-    else:
-        test_boundary = "未做亲身体验；本文依据公开资料整理，未进行完整实测，以下只写资料核验和可试用路径。"
+    use_case = reader_clean_text(item.get("use_case") or "一个 AI 工具、模型或应用的新入口")
+    recommendation = reader_clean_text(item.get("recommendation") or use_case)
+    requirements = reader_clean_text(item.get("requirements") or "需要账号、设备和地区条件支持")
+    availability = reader_clean_text(availability_text(item))
+    pricing = concise_pricing_text(item)
+    platforms = "、".join(text_list(item.get("platforms"), ["以官方说明为准"]))
+    supports_chinese = reader_clean_text(item.get("supports_chinese") or "以官方说明为准")
+    official_image = ai_official_image_candidate(item)
+    image_line = "![官方示例图](images/官方示例-01.png)" if official_image else f"![{name} 使用场景示意图](images/AI发现-01.png)"
+    first_scene = scenarios[0] if scenarios else "把一个具体问题交给 AI 帮忙拆开"
+    opening = (
+        f"如果你已经习惯把问题打给 AI，{name} 值得看的地方，是它把入口往更自然的使用场景推了一步。"
+        f"比如{first_scene}，真正有用的不是多一个按钮，而是少一次来回切换。"
+    )
     lines = [
         f"# {title}",
         "",
-        "有些 AI 工具看起来像“又一个发布页”，真正需要判断的是：它能不能帮普通人少走一点具体的弯路。本期只看一个对象，不做榜单，也不把官方宣传写成实际体验。",
-        "",
-        f"> {test_boundary}",
+        opening,
         "",
         "## 30 秒速览",
         "",
-        f"- 本期发现：{name}",
-        f"- 它是什么：{item.get('use_case') or '一个待核验的 AI 工具或模型'}",
+        f"- 它是什么：{name} 是一个围绕“{use_case}”的 AI 工具或能力入口。",
+        f"- 最值得看的一点：{recommendation}",
         f"- 适合谁：{'、'.join(audience[:3])}",
-        f"- 主要用途：{item.get('recommendation') or item.get('use_case') or '发布前继续核验'}",
-        f"- 使用门槛：{item.get('requirements') or '待核验'}",
-        f"- 国内可用性：{availability_text(item)}",
-        f"- 价格：{pricing_text(item)}",
-        f"- 核验状态：{verification_text(item)}",
+        f"- 怎么开始：先确认账号、地区、设备和入口条件，再从一个低风险小任务试起。",
+        f"- 先注意什么：价格、地区可用性、隐私输入和关键事实准确性都要自己核对。",
         "",
-        f"![{name} 使用场景示意图](images/AI发现-01.png)",
+        image_line,
         "",
-        "## 一、它解决什么问题",
+        f"## 一、{name} 是什么",
         "",
-        item.get("use_case") or "这个条目的用途仍需补充官方资料后再判断。",
+        f"公开资料显示，{name} 的核心不是再造一个聊天窗口，而是把 AI 能力放进“{use_case}”这样的具体路径里。换句话说，它更像一个入口：让用户用更顺手的方式把问题说清楚、拆开，再交给 AI 处理。",
         "",
-        "它值得被单独拿出来看，是因为它不是只给技术圈看的新鲜名词，而是尝试把 AI 能力放进一个更具体的任务里。",
+        "这也是它值得被单独拿出来看的原因。很多 AI 新品听起来都很热闹，但普通读者真正需要判断的是：它能不能进入一个日常场景，帮自己少一点折腾。",
         "",
-        "## 二、它具体能做什么",
+        "## 二、主要功能",
         "",
-        f"{name} 目前公开资料显示的核心能力，是围绕“{item.get('use_case') or '待核验用途'}”展开。它更像一个可试用路径，而不是一个可以直接下结论的成品体验。",
+        f"从官方资料和公开介绍看，{name} 主要围绕这件事展开：{use_case}",
         "",
-        "## 三、三个普通人能理解的使用场景",
+        f"更具体地说，它适合先用来做一些边界清楚的小任务。比如：{('；'.join(scenarios)) if scenarios else recommendation}。这些场景不需要先把它神化，能解决一个小问题，就已经值得继续观察。",
+        "",
+        "## 三、怎么使用",
+        "",
+        f"入口和设备方面，目前可参考的平台包括：{platforms}。中文支持情况是：{supports_chinese}",
+        "",
+        f"真正开始之前，需要先看这几个条件：{requirements}。如果账号、地区或设备条件不满足，体验可能和官方演示有明显差异。",
+        "",
+        "## 四、适合哪些场景",
         "",
     ]
     lines += [f"- {scenario}" for scenario in scenarios]
     lines += [
         "",
-        "## 四、谁适合用，谁暂时不需要",
+        f"从人群看，它更适合：{'、'.join(audience)}。如果你的需求正好落在这些场景里，可以先从一个不涉及隐私和关键决策的小任务开始试。",
         "",
-        f"适合：{'、'.join(audience)}。",
+        "## 五、费用和地区限制",
         "",
-        f"暂时不需要：{'、'.join(not_for)}。",
+        f"费用方面：{pricing}",
         "",
-        "## 五、注册、地区、语言和设备门槛",
+        f"地区和访问方面：{availability}",
         "",
-        f"平台：{'、'.join(text_list(item.get('platforms'), ['待核验']))}。中文支持：{item.get('supports_chinese') or '待核验'}。",
+        "这类信息变化很快，尤其是免费额度、订阅档位、地区支持和支付方式。准备长期使用前，最好以官方页面当前显示为准。",
         "",
-        f"大陆可用性：{availability_text(item)}",
-        "",
-        f"开始使用前需要注意：{item.get('requirements') or '注册、账号地区、设备要求和 API 条件仍需人工核验。'}",
-        "",
-        "## 六、免费额度和付费价格",
-        "",
-        pricing_text(item),
-        "",
-        "价格、免费额度、自动续费和地区币种都可能变化，发布前请重新打开官方价格页确认。",
-        "",
-        "## 七、目前的限制与风险",
+        "## 六、风险边界",
         "",
     ]
     lines += [f"- {risk}" for risk in risks]
     lines += [
         "",
-        "隐私与版权边界：",
+        "隐私与版权也要留意：",
         "",
-        *[f"- {entry}" for entry in privacy],
+        *[f"- {reader_clean_text(entry)}" for entry in privacy],
         "",
-        "## 八、值不值得关注",
+        "另外，AI 输出仍然可能出错。涉及日期、地点、价格、医疗、法律、金融等信息时，不要只听它一句话就下结论。",
         "",
-        f"如果你的工作里已经出现了类似场景，{name} 值得加入待试用清单；如果只是被发布声量吸引，可以先收藏官方文档，等价格、地区和稳定性信息更清楚后再决定。",
-        "",
-        f"本期推荐理由：{item.get('recommendation') or '用途明确，但仍需人工复核后再发布。'}",
-        "",
-        "公开反馈摘录口径：",
-        "",
-        *[f"- {entry}" for entry in feedback],
-        "",
-        "## 九、官方地址和资料来源",
+        "## 七、项目地址和资料来源",
         "",
         *source_lines(item),
         "",
+        "## 值不值得继续看",
+        "",
+        f"如果你的工作里已经出现了类似场景，{name} 值得加入待试用清单；如果只是被发布声量吸引，可以先收藏官方文档，等价格、地区和稳定性信息更清楚后再决定。",
+        "",
+        f"本期推荐理由：{recommendation}",
+        "",
+        "公开反馈里反复出现的观察：",
+        "",
+        *[f"- {reader_clean_text(entry)}" for entry in feedback],
+        "",
         "---",
         "",
-        "## 最后留一个路标",
+        "## 继续沿着这条线索看",
         "",
-        "AI 新发现不负责制造焦虑，只负责把“听起来很厉害”的东西放回现实问题里：谁能用、怎么开始、要花多少钱、风险在哪里。发布前请继续人工核验官方链接和价格地区信息。",
+        "AI 新发现不负责制造焦虑，只负责把“听起来很厉害”的东西放回现实问题里：谁能用、怎么开始、要花多少钱、风险在哪里。点赞关注不迷路，下期继续把新的 AI 坐标放回真实场景里看。",
         "",
         "![结尾图](images/结尾图.png)",
     ]

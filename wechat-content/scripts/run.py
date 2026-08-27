@@ -381,6 +381,8 @@ def main() -> None:
                 {key:value for key,value in record.items() if key != "source_path"}
                 for record in article_images
             ]
+        if payload.get("_official_images"):
+            manifest["official_images"] = payload["_official_images"]
         if github_theme:
             manifest["github_theme"] = github_theme
             manifest["cover_image_mode"] = visual.get("cover_image_mode", "template_fallback")

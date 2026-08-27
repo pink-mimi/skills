@@ -104,6 +104,19 @@ class AiDiscoveryResearchTests(unittest.TestCase):
         self.assertIn(item["mainland_availability"]["status"], {"可直接使用", "存在限制", "需海外账号"})
         self.assertTrue(item["pricing_details"]["verified_at"])
 
+    def test_official_images_are_preserved_as_optional_metadata(self):
+        raw = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        raw["items"][0].pop("official_images", None)
+        raw["items"][0]["official_image_url"] = "https://example.com/atlas-agent-studio/demo.png"
+        raw["items"][0]["official_image_source_page"] = "https://example.com/atlas-agent-studio"
+        raw["items"][0]["official_image_source_path"] = "work/images/demo.png"
+        raw["items"][0]["official_image_description"] = "官方产品演示图"
+        package = self.build(raw)
+        item = package["items"][0]
+        self.assertEqual(item["official_images"][0]["url"], "https://example.com/atlas-agent-studio/demo.png")
+        self.assertTrue(item["official_images"][0]["is_official"])
+        self.assertEqual(item["official_images"][0]["usage_status"], "approved")
+
     def test_research_layer_does_not_generate_wechat_outputs(self):
         package = self.build()
         blob = json.dumps(package, ensure_ascii=False)

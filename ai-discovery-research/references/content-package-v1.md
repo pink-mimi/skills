@@ -39,6 +39,16 @@
 - `verification_grade`
 - `recommendation`
 
+每个 `items[]` 可以包含可选字段 `official_images`，用于向平台制作层提供可追溯图片元数据。每条图片记录包含：
+
+- `url`: 官方图片地址。
+- `source_page`: 图片所在官方页面。
+- `source_path`: 可选，本地缓存路径；没有本地文件时平台层不得假装已经有官方图。
+- `description`: 图片用途说明。
+- `usage_status`: `approved`、`verified` 或 `needs_review`。
+- `verification_status`: `verified`、`approved` 或 `needs_review`。
+- `is_official`: 仅官方发布页、官方文档、官方博客、官方模型卡等来源可标记为 `true`。
+
 `mainland_availability.status` 只能使用：
 
 - `可直接使用`

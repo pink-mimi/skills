@@ -20,6 +20,7 @@ description: Use when 用户需要搜索、核验和筛选 AI 模型、产品、
    - `verified` 或 `partial` 条目的官方来源都必须记录 `verified_at`。
    - `verification_grade: "C"` 的候选不得入选。
    - 只有存在 `experience_notes`、`test_notes` 或 `evidence` 记录时，才能把 `tested` 视为可追溯实测。
+   - 可选记录 `official_images`，但只能把官方发布页、官方文档、官方博客、官方模型卡或官方演示页图片标为官方图；第三方介绍页图片不得标为官方图。
 5. 运行 `build` 生成 `outputs/ai-discovery/YYYY-MM-DD/content-package.json`。
 6. 运行 `verify`。`needs_review` 也可以交给 `wechat-content` 制作审核包，但不得标记为可直接发布。
 

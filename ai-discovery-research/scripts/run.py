@@ -179,6 +179,53 @@ def normalize_pricing_details(value, row):
     }
 
 
+def normalize_official_images(value, row):
+    images = []
+    for entry in as_list(value):
+        if isinstance(entry, dict):
+            url = clean_text(entry.get("url") or entry.get("image_url"))
+            source_page = clean_text(entry.get("source_page") or row.get("official_url"))
+            source_path = clean_text(entry.get("source_path") or entry.get("cache_path") or entry.get("file"))
+            description = clean_text(entry.get("description") or entry.get("alt") or "官方示例图")
+            usage_status = clean_text(entry.get("usage_status") or "needs_review")
+            verification_status = clean_text(entry.get("verification_status") or "needs_review")
+            is_official = bool(entry.get("is_official", False))
+        else:
+            url = clean_text(entry)
+            source_page = clean_text(row.get("official_url"))
+            source_path = ""
+            description = clean_text(row.get("official_image_description") or "官方示例图")
+            usage_status = "needs_review"
+            verification_status = "needs_review"
+            is_official = False
+        if not url:
+            continue
+        images.append(
+            {
+                "url": url,
+                "source_page": source_page,
+                "source_path": source_path,
+                "description": description,
+                "usage_status": usage_status,
+                "verification_status": verification_status,
+                "is_official": is_official,
+            }
+        )
+    if not images and clean_text(row.get("official_image_url")):
+        images.append(
+            {
+                "url": clean_text(row.get("official_image_url")),
+                "source_page": clean_text(row.get("official_image_source_page") or row.get("official_url")),
+                "source_path": clean_text(row.get("official_image_source_path")),
+                "description": clean_text(row.get("official_image_description") or "官方示例图"),
+                "usage_status": clean_text(row.get("official_image_usage_status") or "approved"),
+                "verification_status": clean_text(row.get("official_image_verification_status") or "verified"),
+                "is_official": bool(row.get("official_image_is_official", True)),
+            }
+        )
+    return images
+
+
 def infer_grade(row):
     explicit = clean_text(row.get("verification_grade")).upper()
     if explicit in {"A", "B", "C"}:
@@ -211,6 +258,7 @@ def normalize_candidate(value, rank):
     row["requirements"] = clean_text(row.get("requirements") or row.get("access") or "待核验")
     row["mainland_availability"] = normalize_mainland_availability(row.get("mainland_availability"), row)
     row["pricing_details"] = normalize_pricing_details(row.get("pricing_details"), row)
+    row["official_images"] = normalize_official_images(row.get("official_images"), row)
     row["privacy_and_rights"] = as_list(row.get("privacy_and_rights") or row.get("privacy") or row.get("copyright"))
     row["public_feedback"] = as_list(row.get("public_feedback"))
     row["risks"] = as_list(row.get("risks"))
