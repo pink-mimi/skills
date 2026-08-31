@@ -34,6 +34,7 @@
 - `requirements`
 - `privacy_and_rights`
 - `public_feedback`
+- `popularity_signals`
 - `risks`
 - `verification_status`
 - `verification_grade`
@@ -62,3 +63,5 @@
 - `C`: 只有宣传信息、价格/限制/开放范围不清楚，或关键事实无法核验。不得入选发布。
 
 研究层只生成平台无关内容包，不包含微信公众号 HTML、封面、发布字段或自动发布动作。
+
+`popularity_signals` 记录候选为什么算“最近热门”，例如官方近期发布、多平台报道、社区讨论、GitHub/ModelScope/Hugging Face 热度、应用商店反馈或普通用户可试用路径。入选对象至少需要 2 个可追溯信号；热度不足的候选可以保留在 `candidates`，但不得作为本期重点对象。

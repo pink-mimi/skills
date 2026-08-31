@@ -97,12 +97,32 @@ class AiDiscoveryResearchTests(unittest.TestCase):
             "pricing_details",
             "privacy_and_rights",
             "public_feedback",
+            "popularity_signals",
             "verification_grade",
         ):
             self.assertIn(field, item)
         self.assertGreaterEqual(len(item["scenarios"]), 3)
         self.assertIn(item["mainland_availability"]["status"], {"可直接使用", "存在限制", "需海外账号"})
         self.assertTrue(item["pricing_details"]["verified_at"])
+        self.assertGreaterEqual(len(item["popularity_signals"]), 2)
+
+    def test_popularity_signals_gate_selection(self):
+        raw = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        raw["items"][0]["popularity_signals"] = ["只有官方发布页，缺少独立热度信号"]
+        package = self.build(raw)
+        affected = next(item for item in package["candidates"] if item["name"] == "Atlas Agent Studio")
+        self.assertIn("热度信号少于 2 个", affected["rejection_reasons"])
+        self.assertNotEqual(package["items"][0]["name"], "Atlas Agent Studio")
+
+    def test_selection_cap_does_not_make_package_needs_review(self):
+        package = self.build()
+        self.assertEqual(package["status"], "ready_for_human_review")
+        overflow = [
+            item for item in package["candidates"]
+            if "超过本期一个重点对象" in item["rejection_reasons"]
+        ]
+        self.assertTrue(overflow)
+        self.assertFalse(any("聚焦候选存在核验缺口" in risk for risk in package["risks"]))
 
     def test_official_images_are_preserved_as_optional_metadata(self):
         raw = json.loads(FIXTURE.read_text(encoding="utf-8"))
@@ -157,7 +177,7 @@ class AiDiscoveryResearchTests(unittest.TestCase):
             (SKILL / path).read_text(encoding="utf-8")
             for path in ("README.md", "SKILL.md", "references/sources-and-risks.md", "references/content-package-v1.md")
         )
-        for phrase in ("AI 新发现", "官方来源", "不生成公众号排版", "不得写“我试了”", "## 使用步骤"):
+        for phrase in ("AI 新发现", "官方来源", "不生成公众号排版", "不得写“我试了”", "## 使用步骤", "国内热门发现入口", "热度信号"):
             self.assertIn(phrase, docs)
 
 

@@ -6,7 +6,8 @@
   },
   "discovery": {
     "candidate_minimum": 8,
-    "candidate_maximum": 12
+    "candidate_maximum": 12,
+    "minimum_popularity_signals": 2
   },
   "selection": {
     "minimum": 1,
@@ -21,7 +22,12 @@
     "documentation",
     "paper_page",
     "huggingface",
+    "modelscope",
     "github",
+    "domestic_community_discussion",
+    "domestic_technical_media",
+    "domestic_ai_tool_directories",
+    "domestic_official_sources",
     "technical_media",
     "community_discussion"
   ]

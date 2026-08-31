@@ -40,6 +40,7 @@ REQUIRED_ITEM_FIELDS = (
     "pricing_details",
     "privacy_and_rights",
     "public_feedback",
+    "popularity_signals",
     "verification_grade",
 )
 
@@ -73,7 +74,7 @@ def window(run_at, config):
 
 
 def collect(run_at):
-    query = quote_plus("AI model product launch official blog OR paper OR Hugging Face")
+    query = quote_plus("最近热门 AI 新产品 模型 应用 官方发布 ModelScope GitHub Hugging Face Kimi 通义 豆包 OpenAI")
     request = urllib.request.Request(
         f"https://www.bing.com/search?q={query}",
         headers={"User-Agent": "ai-discovery-research/1.1"},
@@ -261,6 +262,7 @@ def normalize_candidate(value, rank):
     row["official_images"] = normalize_official_images(row.get("official_images"), row)
     row["privacy_and_rights"] = as_list(row.get("privacy_and_rights") or row.get("privacy") or row.get("copyright"))
     row["public_feedback"] = as_list(row.get("public_feedback"))
+    row["popularity_signals"] = as_list(row.get("popularity_signals") or row.get("hot_signals") or row.get("trend_signals"))
     row["risks"] = as_list(row.get("risks"))
     row["verification_status"] = clean_text(row.get("verification_status") or "unverified")
     row["verification_grade"] = infer_grade(row)
@@ -279,7 +281,7 @@ def rejection_reasons(row):
         if field == "official_sources":
             if not row.get(field):
                 reasons.append("缺少官方来源")
-        elif field in {"audience", "risks", "platforms", "not_for", "scenarios", "privacy_and_rights"}:
+        elif field in {"audience", "risks", "platforms", "not_for", "scenarios", "privacy_and_rights", "popularity_signals"}:
             if not row.get(field):
                 reasons.append(f"缺少 {field}")
         elif field in {"mainland_availability", "pricing_details"}:
@@ -289,6 +291,9 @@ def rejection_reasons(row):
             reasons.append(f"缺少 {field}")
     if row.get("verification_grade") == "C":
         reasons.append("C 级候选不发布")
+    minimum_popularity = int(row.get("minimum_popularity_signals") or 2)
+    if len(row.get("popularity_signals") or []) < minimum_popularity:
+        reasons.append(f"热度信号少于 {minimum_popularity} 个")
     if not any(clean_text(source.get("url")) for source in row.get("official_sources") or []):
         reasons.append("官方来源缺少链接")
     if row.get("verification_status") in {"verified", "partial"} and not all(
@@ -313,6 +318,11 @@ def build(raw, run_at, config):
     start, end = window(run_at, config)
     candidate_maximum = int(config["discovery"].get("candidate_maximum", 12))
     rows = [normalize_candidate(value, index) for index, value in enumerate(raw.get("items", [])[:candidate_maximum], 1)]
+    minimum_popularity = int(config.get("discovery", {}).get("minimum_popularity_signals", 2))
+    for row in rows:
+        row["minimum_popularity_signals"] = minimum_popularity
+        row["rejection_reasons"] = rejection_reasons(row)
+        row["eligible"] = not row["rejection_reasons"]
     target_count = int(config["selection"]["target"])
     focused_target = int(config["selection"].get("focused_review_target", 3))
     focused = [row for row in rows if row["verification_grade"] in PUBLISHABLE_GRADES][:focused_target]
@@ -323,7 +333,11 @@ def build(raw, run_at, config):
             selected.append(row)
         elif not row["rejection_reasons"] and len(selected) >= target_count:
             row["rejection_reasons"].append("超过本期一个重点对象")
-    focused_blockers = [row for row in rows[:focused_target] if row["rejection_reasons"]]
+    focused_blockers = [
+        row
+        for row in rows[:focused_target]
+        if [reason for reason in row["rejection_reasons"] if reason != "超过本期一个重点对象"]
+    ]
     risks = ["禁止自动发布；发布前人工复核官方来源、费用限制、隐私安全、版权边界和大陆可用性"]
     candidate_minimum = int(config["discovery"]["candidate_minimum"])
     verified_minimum = int(config["selection"]["verified_minimum"])
@@ -361,6 +375,7 @@ def build(raw, run_at, config):
             "focused_review_count": len(focused),
             "selected_count": len(selected),
             "verified_count": sum(row["verification_status"] == "verified" for row in selected),
+            "minimum_popularity_signals": minimum_popularity,
             "minimum": int(config["selection"]["minimum"]),
             "maximum": int(config["selection"]["maximum"]),
             "target": target_count,
