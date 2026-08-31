@@ -82,14 +82,25 @@ def title_options(content_type: str, title: str, count: int) -> list[str]:
     if content_type == "daily-news":
         return [title, f"未完地图｜{title}", f"昨天，这 {count} 件事值得关注", f"昨日坐标：{count} 个正在发生的变化", f"别只看热搜，昨天更值得留意的是这些事"]
     if content_type == "ai-discovery":
-        base = title.replace("：ChatGPT 开始“会听人说话”", "").replace("：AI 对话入口变得更自然", "")
-        return [
+        base = title
+        for suffix in ("：ChatGPT 开始“会听人说话”", "：AI 对话入口变得更自然", "：AI 开始往桌面工作流里走", "：一个值得先看清楚的 AI Agent", "：这个 AI 新工具值得先看哪一点"):
+            base = base.replace(suffix, "")
+        options = [
             title,
             f"未完地图｜{title}",
             f"{base}，普通人先看这一点",
-            "ChatGPT 语音更新后，最值得看的不是发布会",
-            "走路、练口语、开会前：新的 AI 语音入口能做什么",
         ]
+        if "GPT-Live" in base or "语音" in title:
+            options.extend([
+                "ChatGPT 语音更新后，最值得看的不是发布会",
+                "走路、练口语、开会前：新的 AI 语音入口能做什么",
+            ])
+        else:
+            options.extend([
+                f"{base} 值不值得试？先看入口和限制",
+                f"AI 新发现：{base} 把工具入口往哪里推",
+            ])
+        return options
     return [title, f"未完地图｜{title}", f"本周开源坐标：{count} 个值得收藏的项目", f"GitHub 本周观察：这 {count} 个项目解决了什么", f"从热榜到实用：本周值得打开的 {count} 个项目"]
 
 

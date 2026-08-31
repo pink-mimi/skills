@@ -1169,8 +1169,10 @@ def ai_discovery_article_title(item: dict, editorial: dict) -> str:
     use_case = str(item.get("use_case") or "")
     if name.lower() == "gpt-live":
         return "GPT-Live 来了：ChatGPT 开始“会听人说话”"
+    if name.endswith("更新") and ("桌面" in use_case or "Agent" in name or "agent" in use_case.lower()):
+        return f"{name}：AI 开始往桌面工作流里走"
     if "语音" in use_case or "对话" in use_case:
-        return f"{name} 来了：AI 对话入口变得更自然"
+        return f"{name}：AI 对话入口变得更自然"
     if "Agent" in name or "agent" in use_case.lower():
         return f"{name} 是什么：一个值得先看清楚的 AI Agent"
     return f"{name} 是什么：这个 AI 新工具值得先看哪一点"

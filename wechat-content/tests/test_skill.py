@@ -28,6 +28,19 @@ class WechatContentTests(unittest.TestCase):
         self.assertNotIn("\u8fd9",title)
         self.assertNotIn("\u4ef6\u4e8b",title)
 
+    def test_ai_discovery_generic_titles_do_not_leak_gpt_live_copy(self):
+        from run import title_options
+        from rendering import ai_discovery_article_title
+        item = {
+            "name": "Kimi Work 3.2 更新",
+            "use_case": "把桌面唤起、语音听写、插件市场和 Agent 浏览器放进同一个 Kimi Work 工作流。",
+        }
+        title = ai_discovery_article_title(item, {})
+        titles = "\n".join(title_options("ai-discovery", title, 1))
+        self.assertIn("Kimi Work 3.2 更新：AI 开始往桌面工作流里走", titles)
+        self.assertNotIn("ChatGPT 语音更新后", titles)
+        self.assertNotIn("走路、练口语、开会前", titles)
+
     def test_article_title_overrides_internal_package_title(self):
         fixture=json.loads((SKILL/"tests/fixtures/daily-news-content-package.json").read_text(encoding="utf-8"))
         fixture["editorial"]["title"]="2026-07-19 新闻内容包"
