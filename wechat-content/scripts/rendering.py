@@ -9,7 +9,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 MAX_REMOTE_IMAGE_BYTES = 8 * 1024 * 1024
@@ -322,6 +322,112 @@ def github_image2_cover_panel(size, title, kicker, base_path, square=False):
     return image.convert("RGB")
 
 
+def ai_cover_title(title: str) -> str:
+    compact = re.sub(r"^AI\s*新发现[：:]\s*", "", str(title or "").strip())
+    compact = compact.replace(" 能帮谁少绕路？", "")
+    compact = compact.replace("能帮谁少绕路？", "")
+    return compact or "本期 AI 新发现"
+
+
+def add_ai_cover_veil(image, square=False):
+    width, height = image.size
+    veil = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(veil)
+    for x in range(width):
+        progress = x / max(1, width)
+        alpha = int((236 if square else 248) * (1 - progress) ** 1.34)
+        draw.line((x, 0, x, height), fill=(3, 13, 18, alpha))
+    text_zone = int(width * (0.62 if square else 0.52))
+    for x in range(text_zone):
+        alpha = int((78 if square else 96) * (1 - x / max(1, text_zone)) ** 1.8)
+        draw.line((x, 0, x, height), fill=(3, 13, 18, alpha))
+    for y in range(height):
+        top = int(62 * (1 - y / max(1, height)) ** 1.2)
+        bottom = int(92 * (y / max(1, height)) ** 1.7)
+        draw.line((0, y, width, y), fill=(3, 13, 18, max(top, bottom)))
+    return Image.alpha_composite(image.convert("RGBA"), veil)
+
+
+def draw_cover_text(draw, xy, text, text_font, fill, shadow=(0, 0, 0, 190)):
+    x, y = xy
+    for dx, dy in ((0, 3), (2, 3), (-2, 3), (0, 5)):
+        draw.text((x + dx, y + dy), text, font=text_font, fill=shadow)
+    draw.text((x, y), text, font=text_font, fill=fill)
+
+
+def ai_cover_headline_lines(title: str) -> list[str]:
+    compact = ai_cover_title(title)
+    if "：" in compact:
+        first, second = compact.split("：", 1)
+        second = second.replace("ChatGPT", "ChatGPT ")
+        return [first.strip(), second.strip()]
+    if ":" in compact:
+        first, second = compact.split(":", 1)
+        return [first.strip(), second.strip()]
+    return [compact]
+
+
+def ai_official_cover_panel(size, title, kicker, base_path, square=False):
+    centering = (0.58, 0.5) if square else (0.66, 0.5)
+    with Image.open(base_path) as source:
+        base = ImageOps.fit(source.convert("RGB"), size, method=Image.Resampling.LANCZOS, centering=centering)
+    image = add_ai_cover_veil(base, square=square)
+    draw = ImageDraw.Draw(image)
+    width, height = size
+
+    panel = (22, 24, width - 24, height - 24) if square else (32, 30, 456, height - 30)
+    panel_crop = image.crop(panel).filter(ImageFilter.GaussianBlur(14))
+    glass = Image.new("RGBA", panel_crop.size, (7, 20, 24, 168 if square else 158))
+    panel_crop = Image.alpha_composite(panel_crop, glass)
+    mask = Image.new("L", panel_crop.size, 0)
+    mask_draw = ImageDraw.Draw(mask)
+    radius = 24 if square else 28
+    mask_draw.rounded_rectangle((0, 0, panel_crop.size[0] - 1, panel_crop.size[1] - 1), radius=radius, fill=255)
+    image.paste(panel_crop, panel, mask)
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle(panel, radius=radius, outline=(255, 255, 255, 62), width=1)
+
+    left = panel[0] + (24 if square else 30)
+    top = panel[1] + (25 if square else 30)
+    accent = "#C7FF64"
+    mint = "#A7F0DD"
+    white = "#FFFFFF"
+    muted = "#DCEBE7"
+
+    draw.text((left, top), "AI 新发现", font=font(21 if square else 23, True), fill=accent)
+    lines = ai_cover_headline_lines(title)[:2]
+    y = top + (54 if square else 62)
+    max_width = panel[2] - left - (22 if square else 28)
+    for index, line in enumerate(lines):
+        fitted, fitted_font = fit_cover_title(
+            draw,
+            line,
+            max_width,
+            max_lines=1,
+            preferred_size=(42 if square else 50) if index == 0 else (29 if square else 34),
+            minimum_size=(29 if square else 34) if index == 0 else (22 if square else 26),
+        )
+        draw_cover_text(draw, (left, y), fitted[0] if fitted else line, fitted_font, white, shadow=(0, 0, 0, 185))
+        y += 58 if square and index == 0 else 44 if square else 64 if index == 0 else 48
+
+    if not square:
+        note = "官网图里的新语音入口，先看它能解决什么具体问题"
+        note_font = font(17)
+        note_lines = wrap_by_width(draw, note, note_font, max_width, 2)
+        y += 10
+        for line in note_lines:
+            draw.text((left, y), line, font=note_font, fill=muted)
+            y += 27
+
+    bar_y = panel[3] - (58 if square else 54)
+    draw.rounded_rectangle((left, bar_y, left + 92, bar_y + 5), radius=3, fill=accent)
+    draw.rounded_rectangle((left + 104, bar_y, min(panel[2] - 24, left + 222), bar_y + 5), radius=3, fill=mint)
+    draw_cover_text(draw, (left, bar_y + 16), "未完地图", font(17 if square else 18, True), white, shadow=(0, 0, 0, 145))
+    if not square:
+        draw.text((left + 92, bar_y + 18), "把新工具放回真实场景", font=font(16), fill=mint)
+    return image.convert("RGB")
+
+
 def cover_panel(size, title, kicker, palette, square=False, base_path=None):
     bg, ink, primary, accent = palette
     github_cover = "GitHub" in str(kicker)
@@ -329,6 +435,8 @@ def cover_panel(size, title, kicker, palette, square=False, base_path=None):
     has_base = bool(base_path and Path(base_path).exists())
     if github_cover and has_base:
         return github_image2_cover_panel(size, title, kicker, Path(base_path), square=square)
+    if ai_cover and has_base:
+        return ai_official_cover_panel(size, title, kicker, Path(base_path), square=square)
     if base_path and Path(base_path).exists():
         centering = (0.34, 0.5) if square else (0.5, 0.5)
         with Image.open(base_path) as source:
@@ -605,7 +713,12 @@ def render_images(
         and visual.get("cover_image_mode") == "live_image2"
         and Path(visual.get("cover_path") or "").exists()
     )
-    cover_base = Path(visual["cover_path"]) if (use_bundled_base or use_github_cover_base) else None
+    ai_official_cover = None
+    if payload["content_type"] == "ai-discovery" and payload.get("items"):
+        first_official = ai_official_image_candidate(payload["items"][0])
+        if first_official:
+            ai_official_cover = Path(first_official["source_path"])
+    cover_base = Path(visual["cover_path"]) if (use_bundled_base or use_github_cover_base) else ai_official_cover
     wide = cover_panel((900, 383), title, kicker, palette, base_path=cover_base)
     square = cover_panel((383, 383), title, kicker, palette, square=True, base_path=cover_base)
     combined = Image.new("RGB", (1283, 383), palette[0]); combined.paste(wide, (0, 0)); combined.paste(square, (900, 0))
@@ -975,7 +1088,11 @@ def reader_clean_text(value: str) -> str:
     }
     for old, new in replacements.items():
         text = text.replace(old, new)
-    return re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"([。！？])；", "；", text)
+    text = re.sub(r"；{2,}", "；", text)
+    text = re.sub(r"。{2,}", "。", text)
+    return text.strip()
 
 
 def concise_pricing_text(item: dict) -> str:
@@ -985,7 +1102,7 @@ def concise_pricing_text(item: dict) -> str:
         return f"{base}；具体额度、币种和自动续费规则以官方价格页为准。"
     parts = []
     for key in ("free", "free_quota", "lowest_paid_price", "subscription"):
-        value = reader_clean_text(details.get(key) or "")
+        value = reader_clean_text(details.get(key) or "").strip("。；; ")
         if value and value not in parts:
             parts.append(value)
     paid_only = text_list(details.get("paid_only_features"))
@@ -1021,16 +1138,54 @@ def source_lines(item: dict) -> list[str]:
     return lines
 
 
+def ai_official_image_label(item: dict, image: dict) -> str:
+    source_page = str(image.get("source_page") or "")
+    official_url = str(item.get("official_url") or "")
+    source_type = str(image.get("source_type") or "")
+    if source_type == "official_release" or (official_url and source_page.rstrip("/") == official_url.rstrip("/")):
+        return "官方示例图"
+    company = str(item.get("company") or "").strip()
+    return f"{company} 官方资料图" if company else "官方资料图"
+
+
+def ai_official_image_caption(item: dict, image: dict) -> str:
+    label = ai_official_image_label(item, image)
+    description = reader_clean_text(image.get("description") or "")
+    source_page = str(image.get("source_page") or item.get("official_url") or "").strip()
+    if description and "?" not in description and "待确认" not in description:
+        text = f"{label}：{description}"
+    else:
+        text = f"{label}：来自官方页面的资料图，用来辅助理解功能路径。"
+    if source_page:
+        text += f" 来源：{source_page}"
+    return text
+
+
+def ai_discovery_article_title(item: dict, editorial: dict) -> str:
+    explicit = str(editorial.get("title") or editorial.get("article_title") or "").strip()
+    if explicit and "能帮谁少绕路" not in explicit and not explicit.startswith("AI 新发现："):
+        return explicit
+    name = str(item.get("name") or "本期 AI 新发现").strip()
+    use_case = str(item.get("use_case") or "")
+    if name.lower() == "gpt-live":
+        return "GPT-Live 来了：ChatGPT 开始“会听人说话”"
+    if "语音" in use_case or "对话" in use_case:
+        return f"{name} 来了：AI 对话入口变得更自然"
+    if "Agent" in name or "agent" in use_case.lower():
+        return f"{name} 是什么：一个值得先看清楚的 AI Agent"
+    return f"{name} 是什么：这个 AI 新工具值得先看哪一点"
+
+
 def build_ai_discovery_article(payload: dict):
     item = (payload.get("items") or [{}])[0]
     editorial = payload.get("editorial") or {}
     name = item.get("name") or "本期 AI 新发现"
-    title = editorial.get("title") or f"AI 新发现：{name} 能帮谁少绕路？"
+    title = ai_discovery_article_title(item, editorial)
     audience = text_list(item.get("audience"), ["对 AI 工具有实际需求的读者"])
     scenarios = text_list(item.get("scenarios"), ["资料整理", "流程拆解", "重复任务辅助"])[:3]
     risks = [reader_clean_text(value) for value in text_list(item.get("risks"), ["使用前继续核对隐私、费用、版权和可用地区"])]
-    privacy = text_list(item.get("privacy_and_rights"), risks)
-    feedback = text_list(item.get("public_feedback"), ["公开反馈有限，本文主要依据官方资料整理"])
+    privacy = [reader_clean_text(value) for value in text_list(item.get("privacy_and_rights"), risks)]
+    feedback = [reader_clean_text(value) for value in text_list(item.get("public_feedback"), ["公开反馈有限，本文主要依据官方资料整理"])]
     use_case = reader_clean_text(item.get("use_case") or "一个 AI 工具、模型或应用的新入口")
     recommendation = reader_clean_text(item.get("recommendation") or use_case)
     requirements = reader_clean_text(item.get("requirements") or "需要账号、设备和地区条件支持")
@@ -1039,11 +1194,15 @@ def build_ai_discovery_article(payload: dict):
     platforms = "、".join(text_list(item.get("platforms"), ["以官方说明为准"]))
     supports_chinese = reader_clean_text(item.get("supports_chinese") or "以官方说明为准")
     official_image = ai_official_image_candidate(item)
-    image_line = "![官方示例图](images/官方示例-01.png)" if official_image else f"![{name} 使用场景示意图](images/AI发现-01.png)"
+    image_label = ai_official_image_label(item, official_image) if official_image else f"{name} 使用场景示意图"
+    image_path = "images/官方示例-01.png" if official_image else "images/AI发现-01.png"
+    image_caption = ai_official_image_caption(item, official_image) if official_image else f"使用场景示意图：围绕 {name} 的典型使用路径绘制，不代表真实产品界面。"
     first_scene = scenarios[0] if scenarios else "把一个具体问题交给 AI 帮忙拆开"
+    audience_text = "、".join(audience[:3])
+    scenario_text = "；".join(scenarios)
     opening = (
-        f"如果你已经习惯把问题打给 AI，{name} 值得看的地方，是它把入口往更自然的使用场景推了一步。"
-        f"比如{first_scene}，真正有用的不是多一个按钮，而是少一次来回切换。"
+        f"有些 AI 工具不用先问它有多强，先问一个更小的问题：它能不能让你少切一次窗口、少组织一遍语言、少在脑子里绕一圈。"
+        f"比如{first_scene}，{name} 值得看的地方，就在这种很日常的入口变化里。"
     )
     lines = [
         f"# {title}",
@@ -1052,31 +1211,33 @@ def build_ai_discovery_article(payload: dict):
         "",
         "## 30 秒速览",
         "",
-        f"- 它是什么：{name} 是一个围绕“{use_case}”的 AI 工具或能力入口。",
+        f"- 它是什么：{name} 是一个把 AI 能力放进具体使用场景里的新入口，核心用途是{use_case}",
         f"- 最值得看的一点：{recommendation}",
-        f"- 适合谁：{'、'.join(audience[:3])}",
-        f"- 怎么开始：先确认账号、地区、设备和入口条件，再从一个低风险小任务试起。",
-        f"- 先注意什么：价格、地区可用性、隐私输入和关键事实准确性都要自己核对。",
+        f"- 适合谁：{audience_text}",
+        f"- 怎么开始：先确认 {platforms} 入口、账号地区和设备权限，再拿一个低风险小任务试起。",
+        f"- 先注意什么：免费额度、付费档位、地区支持和隐私规则变化都很快，长期使用前以官方页面为准。",
         "",
-        image_line,
+        f"![{image_label}]({image_path})",
+        "",
+        f"图注：{image_caption}",
         "",
         f"## 一、{name} 是什么",
         "",
-        f"公开资料显示，{name} 的核心不是再造一个聊天窗口，而是把 AI 能力放进“{use_case}”这样的具体路径里。换句话说，它更像一个入口：让用户用更顺手的方式把问题说清楚、拆开，再交给 AI 处理。",
+        f"公开资料显示，{name} 不是简单多一个聊天按钮，而是把 AI 对话放进“{use_case}”这类更顺手的路径里。它想解决的不是让用户多学一套操作，而是让问题可以更自然地被说出来、接住，再继续往下处理。",
         "",
-        "这也是它值得被单独拿出来看的原因。很多 AI 新品听起来都很热闹，但普通读者真正需要判断的是：它能不能进入一个日常场景，帮自己少一点折腾。",
+        "这类变化看起来不一定轰动，但对普通用户很关键：AI 从一个需要专门打开的窗口，慢慢变成某个场景里的协作者。能不能真的顺手，还要回到账号、地区、费用和稳定性里看。",
         "",
         "## 二、主要功能",
         "",
-        f"从官方资料和公开介绍看，{name} 主要围绕这件事展开：{use_case}",
+        f"围绕官方说明来看，{name} 的主线是：{use_case}",
         "",
-        f"更具体地说，它适合先用来做一些边界清楚的小任务。比如：{('；'.join(scenarios)) if scenarios else recommendation}。这些场景不需要先把它神化，能解决一个小问题，就已经值得继续观察。",
+        f"它最适合先放进边界清楚的小任务里观察，例如{scenario_text}。这些任务不需要把工具神化，只要能少打几行字、少整理一次上下文，就已经有继续看的价值。",
         "",
         "## 三、怎么使用",
         "",
-        f"入口和设备方面，目前可参考的平台包括：{platforms}。中文支持情况是：{supports_chinese}",
+        f"目前可以关注的入口包括：{platforms}。中文支持方面，{supports_chinese}",
         "",
-        f"真正开始之前，需要先看这几个条件：{requirements}。如果账号、地区或设备条件不满足，体验可能和官方演示有明显差异。",
+        f"上手前先看条件：{requirements.rstrip('。；;')}。如果账号、地区、设备版本或权限没有满足，实际体验可能和官方介绍有明显差异。",
         "",
         "## 四、适合哪些场景",
         "",
@@ -1084,15 +1245,15 @@ def build_ai_discovery_article(payload: dict):
     lines += [f"- {scenario}" for scenario in scenarios]
     lines += [
         "",
-        f"从人群看，它更适合：{'、'.join(audience)}。如果你的需求正好落在这些场景里，可以先从一个不涉及隐私和关键决策的小任务开始试。",
+        f"从人群看，它更适合：{'、'.join(audience)}。如果你正好有这些需求，可以从一个不涉及隐私、不影响关键决策的小任务开始试。",
         "",
         "## 五、费用和地区限制",
         "",
-        f"费用方面：{pricing}",
+        f"费用方面，{pricing.rstrip('。；;')}。",
         "",
-        f"地区和访问方面：{availability}",
+        f"地区和访问方面，{availability.rstrip('。；;')}。",
         "",
-        "这类信息变化很快，尤其是免费额度、订阅档位、地区支持和支付方式。准备长期使用前，最好以官方页面当前显示为准。",
+        "价格、额度、币种、订阅档位和地区支持都可能变化，尤其是刚上线的新能力。这里更适合当作试用前的路线提示，不适合当作长期价格承诺。",
         "",
         "## 六、风险边界",
         "",
@@ -1102,7 +1263,7 @@ def build_ai_discovery_article(payload: dict):
         "",
         "隐私与版权也要留意：",
         "",
-        *[f"- {reader_clean_text(entry)}" for entry in privacy],
+        *[f"- {entry}" for entry in privacy],
         "",
         "另外，AI 输出仍然可能出错。涉及日期、地点、价格、医疗、法律、金融等信息时，不要只听它一句话就下结论。",
         "",
@@ -1112,19 +1273,19 @@ def build_ai_discovery_article(payload: dict):
         "",
         "## 值不值得继续看",
         "",
-        f"如果你的工作里已经出现了类似场景，{name} 值得加入待试用清单；如果只是被发布声量吸引，可以先收藏官方文档，等价格、地区和稳定性信息更清楚后再决定。",
+        f"如果你的日常工作里已经出现了类似场景，{name} 值得加入待试用清单。它不是非用不可，但值得作为一个新坐标先放进地图里。",
         "",
         f"本期推荐理由：{recommendation}",
         "",
         "公开反馈里反复出现的观察：",
         "",
-        *[f"- {reader_clean_text(entry)}" for entry in feedback],
+        *[f"- {entry}" for entry in feedback],
         "",
         "---",
         "",
         "## 继续沿着这条线索看",
         "",
-        "AI 新发现不负责制造焦虑，只负责把“听起来很厉害”的东西放回现实问题里：谁能用、怎么开始、要花多少钱、风险在哪里。点赞关注不迷路，下期继续把新的 AI 坐标放回真实场景里看。",
+        "AI 新发现不负责制造焦虑，只把“听起来很厉害”的东西放回真实场景里看：谁能用、怎么开始、要花多少钱、风险在哪里。点赞关注不迷路，下期继续把新的 AI 坐标放回现实问题里。",
         "",
         "![结尾图](images/结尾图.png)",
     ]
@@ -1380,13 +1541,28 @@ def build_editor_review_panel(payload: dict, copy_state: dict) -> str:
 
 def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual: dict | None = None, copy_state: dict | None = None):
     bg, ink, primary, accent = tuple(visual["palette"]) if visual else PALETTES[theme]
+    is_ai_discovery = payload.get("content_type") == "ai-discovery"
+    ai_text = "#3F3F3F"
+    ai_title = "#1F2933"
+    ai_muted = "#7A869A"
+    ai_accent = "#2F7D7B"
+    ai_rule = "#DCEBE8"
+    ai_wash = "#F7FAF9"
     label = {"daily-news": "昨日坐标", "ai-discovery": "AI 坐标"}.get(payload["content_type"], "开源坐标")
     title=next((line[2:].strip() for line in markdown.splitlines() if line.startswith("# ")),"微信公众号审核包")
     blocks = []
     pending_role = None
+    ai_quick_mode = False
+    ai_quick_remaining = 0
     for raw in markdown.splitlines():
         line = raw.strip()
         if not line: continue
+        if line == "<!-- ai-quick:start -->":
+            ai_quick_mode = True
+            continue
+        if line == "<!-- ai-quick:end -->":
+            ai_quick_mode = False
+            continue
         github_marker = re.fullmatch(
             r"<!-- github-(?:opening|project|closing):(?:start|end) -->",
             line,
@@ -1442,13 +1618,35 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
             continue
         if line.startswith("!["):
             match = re.match(r"!\[([^]]*)\]\(([^)]+)\)", line)
+            alt_text = match.group(1) if match else "正文图片"
             src = data_uri(image_dir / Path(match.group(2)).name)
-            blocks.append(f'<img src="{src}" alt="{html.escape(match.group(1))}" style="display:block;width:100%;height:auto;margin:24px 0;border-radius:10px">'); continue
-        if line == "---": blocks.append(f'<div style="height:1px;background:{primary}22;margin:34px 0"></div>'); continue
+            if is_ai_discovery and ("官方" in alt_text or "使用场景" in alt_text):
+                blocks.append(f'<figure data-role="ai-visual" style="margin:26px 0 8px;padding:0;border:0;border-radius:6px;background:#FFFFFF;overflow:hidden"><img src="{src}" alt="{html.escape(alt_text)}" style="display:block;width:100%;height:auto;margin:0;border-radius:6px"></figure>')
+            else:
+                blocks.append(f'<img src="{src}" alt="{html.escape(alt_text)}" style="display:block;width:100%;height:auto;margin:24px 0;border-radius:10px">')
+            continue
+        if is_ai_discovery and line.startswith("图注："):
+            caption = line.replace("图注：", "", 1).strip()
+            blocks.append(f'<p data-role="ai-image-caption" style="margin:6px 0 28px;color:{ai_muted};font-size:12px;line-height:1.65;text-align:left;letter-spacing:.2px;word-break:break-all;overflow-wrap:anywhere">{inline(caption,ai_accent)}</p>')
+            continue
+        if line == "---":
+            if is_ai_discovery:
+                blocks.append(f'<div style="height:1px;background:{ai_rule};margin:34px 0 30px"></div>')
+            else:
+                blocks.append(f'<div style="height:1px;background:{primary}22;margin:34px 0"></div>')
+            continue
         if line.startswith("# "): continue
         if line.startswith("## "):
+            heading_text = line[3:]
             project_role = ' data-role="github-project-name"' if payload.get("content_type") == "github-hot" and " · " in line else ""
-            blocks.append(f'<section style="margin:30px 0 16px"><div style="width:36px;height:4px;margin-bottom:10px;border-radius:2px;background:{primary}"></div><h2{project_role} style="font-size:22px;line-height:1.5;color:{ink};margin:0;font-weight:800">{inline(line[3:],primary)}</h2></section>'); continue
+            if is_ai_discovery:
+                blocks.append(f'<section data-role="ai-heading" style="margin:34px 0 15px;padding:0 0 0 11px;border-left:3px solid {ai_accent};box-sizing:border-box"><h2{project_role} style="font-size:20px;line-height:1.45;color:{ai_title};margin:0;font-weight:750;letter-spacing:.3px">{inline(heading_text,ai_accent)}</h2></section>')
+            else:
+                blocks.append(f'<section style="margin:30px 0 16px"><div style="width:36px;height:4px;margin-bottom:10px;border-radius:2px;background:{primary}"></div><h2{project_role} style="font-size:22px;line-height:1.5;color:{ink};margin:0;font-weight:800">{inline(heading_text,primary)}</h2></section>')
+            if is_ai_discovery and heading_text.replace(" ", "") == "30秒速览":
+                ai_quick_mode = True
+                ai_quick_remaining = 5
+            continue
         if line.startswith("### "): blocks.append(f'<h3 data-role="github-project-name" style="margin:6px 0 12px;color:{ink};font-size:25px;line-height:1.35;font-weight:850;letter-spacing:-.02em">{inline(line[4:],primary)}</h3>'); continue
         if line.startswith("> "):
             content=inline(line[2:],primary)
@@ -1461,8 +1659,32 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
             pending_role=None; continue
         if line.startswith("原文地址："):
             blocks.append(f'<p data-role="source-url" style="font-size:14px;line-height:1.75;color:#536875;margin:2px 0 14px;text-align:left;word-break:break-all;overflow-wrap:anywhere">{inline(line,primary)}</p>'); continue
-        if line.startswith("- "): blocks.append(f'<p style="font-size:16px;line-height:1.75;color:#334E68;margin:6px 0 6px 18px;text-indent:-18px">•　{inline(line[2:],primary)}</p>'); continue
-        if re.match(r"^\d+\. ",line): blocks.append(f'<p style="font-size:14px;line-height:1.8;color:#536875;margin:8px 0;overflow-wrap:anywhere">{inline(line,primary)}</p>'); continue
+        if line.startswith("- "):
+            bullet_text = line[2:]
+            if is_ai_discovery and ai_quick_mode:
+                key, sep, value = bullet_text.partition("：")
+                if not sep:
+                    key, value = "速览", bullet_text
+                blocks.append(f'<section data-role="ai-quick-row" style="margin:0;padding:9px 0 10px;border:0;border-bottom:1px solid {ai_rule};background:transparent;box-sizing:border-box"><p style="margin:0;color:{ai_text};font-size:15px;line-height:1.72;text-align:left;letter-spacing:.45px;overflow-wrap:anywhere"><strong style="color:{ai_accent};font-weight:750">{html.escape(key)}</strong><span style="color:{ai_muted}">｜</span>{inline(value,ai_accent)}</p></section>')
+                ai_quick_remaining -= 1
+                if ai_quick_remaining <= 0:
+                    ai_quick_mode = False
+            elif is_ai_discovery:
+                blocks.append(f'<p style="font-size:15px;line-height:1.78;color:{ai_text};margin:8px 0 8px 18px;text-indent:-18px;text-align:left;letter-spacing:.45px;overflow-wrap:anywhere">•　{inline(bullet_text,ai_accent)}</p>')
+            else:
+                blocks.append(f'<p style="font-size:16px;line-height:1.75;color:#334E68;margin:6px 0 6px 18px;text-indent:-18px">•　{inline(bullet_text,primary)}</p>')
+            continue
+        if re.match(r"^\d+\. ",line):
+            if is_ai_discovery:
+                source_style = f"font-size:13px;line-height:1.68;color:{ai_title};margin:11px 0 2px;text-align:left;letter-spacing:.25px;word-break:break-all;overflow-wrap:anywhere"
+                blocks.append(f'<p data-role="ai-source-title" style="{source_style}">{inline(line,ai_accent)}</p>')
+            else:
+                source_style = "font-size:14px;line-height:1.8;color:#536875;margin:8px 0;overflow-wrap:anywhere"
+                blocks.append(f'<p style="{source_style}">{inline(line,primary)}</p>')
+            continue
+        if is_ai_discovery and line.startswith("http"):
+            blocks.append(f'<p data-role="ai-source-url" style="margin:0 0 9px;padding:7px 9px;background:{ai_wash};border-radius:4px;color:{ai_muted};font-size:12px;line-height:1.55;text-align:left;letter-spacing:.1px;word-break:break-all;overflow-wrap:anywhere">{html.escape(line)}</p>')
+            continue
         if line.startswith("**"):
             if payload.get("content_type") == "github-hot" and line.startswith("**适合谁？**"):
                 audience_text = re.sub(r"^\*\*适合谁？\*\*\s*", "", line).strip("　 ")
@@ -1499,7 +1721,10 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
             blocks.append(f'<p data-role="github-description-card" style="font-size:15px;line-height:1.9;color:#31474F;margin:8px 0 18px;padding:14px 18px;background:{bg};border-radius:8px;text-align:justify;overflow-wrap:anywhere">{inline(line,primary)}</p>')
             pending_role=None
             continue
-        blocks.append(f'<p style="font-size:16px;line-height:1.95;color:#31474F;margin:12px 0;text-align:justify;overflow-wrap:anywhere">{inline(line,primary)}</p>')
+        if is_ai_discovery:
+            blocks.append(f'<p style="font-size:15px;line-height:1.78;color:{ai_text};margin:13px 0;text-align:left;letter-spacing:.45px;text-indent:0;overflow-wrap:anywhere">{inline(line,ai_accent)}</p>')
+        else:
+            blocks.append(f'<p style="font-size:16px;line-height:1.95;color:#31474F;margin:12px 0;text-align:justify;overflow-wrap:anywhere">{inline(line,primary)}</p>')
     legacy_allowed=payload["status"]=="ready_for_human_review"
     copy_state=copy_state or {"allowed":legacy_allowed,"reason":"legacy","publish_ready":legacy_allowed,"review_counts":{"verified":0,"partial":0,"unverified":0}}
     ready_to_copy = bool(copy_state["allowed"])
@@ -1513,4 +1738,9 @@ def build_html(markdown: str, image_dir: Path, payload: dict, theme: str, visual
         notice = f'<div data-role="review-notice" style="max-width:740px;margin:18px auto;padding:12px;background:#FFF2CC;color:#6B5415;box-sizing:border-box">{html.escape(copy_state.get("reason") or "正文尚未达到复制条件")}，请先补全正文。</div>'
     review_panel=build_editor_review_panel(payload,copy_state)
     cover=data_uri(image_dir/"横版封面.png")
-    return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)}｜微信排版预览</title></head><body style="margin:0;background:#EFF6FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif"><div style="position:sticky;top:0;background:#102A43;padding:15px;text-align:center;z-index:9"><button id="copy-wechat" {button_attributes}>{button_label}</button><span id="copy-status" style="color:#DBEAFE;margin-left:14px">复制后粘贴到微信公众号编辑器</span></div>{notice}{review_panel}<main style="max-width:760px;margin:24px auto;padding:0 16px 40px;box-sizing:border-box"><section id="cover-preview" style="margin-bottom:18px;padding:18px;background:#fff;border-radius:12px;box-shadow:0 4px 18px rgba(30,64,175,.08)"><img src="{cover}" alt="横版封面" style="display:block;width:100%;height:auto;border-radius:8px"><h1 style="margin:20px 0 8px;color:#102A43;font-size:27px;line-height:1.4">{html.escape(title)}</h1><p style="margin:0;color:#64748B;font-size:14px">封面和标题不包含在复制区域，请在公众号后台分别填写。</p></section><article id="wechat-content" style="padding:28px 24px;border-radius:12px;background:#fff;box-shadow:0 4px 18px rgba(30,64,175,.08)">{''.join(blocks)}</article></main><script>async function copyWechat(){{const node=document.getElementById('wechat-content');try{{const htmlBlob=new Blob([node.innerHTML],{{type:'text/html'}});const textBlob=new Blob([node.innerText],{{type:'text/plain'}});await navigator.clipboard.write([new ClipboardItem({{'text/html':htmlBlob,'text/plain':textBlob}})]);document.getElementById('copy-status').textContent='复制成功，请到公众号编辑器粘贴';}}catch(error){{const range=document.createRange();range.selectNodeContents(node);const selection=getSelection();selection.removeAllRanges();selection.addRange(range);document.execCommand('copy');selection.removeAllRanges();document.getElementById('copy-status').textContent='已复制，请粘贴后检查图片';}}}}</script></body></html>'''
+    page_bg = "#F6F7F5" if is_ai_discovery else "#EFF6FF"
+    main_style = "max-width:728px;margin:22px auto;padding:0 14px 42px;box-sizing:border-box" if is_ai_discovery else "max-width:760px;margin:24px auto;padding:0 16px 40px;box-sizing:border-box"
+    preview_style = "margin-bottom:16px;padding:14px;background:#fff;border-radius:6px;box-shadow:0 2px 14px rgba(31,41,51,.06)" if is_ai_discovery else "margin-bottom:18px;padding:18px;background:#fff;border-radius:12px;box-shadow:0 4px 18px rgba(30,64,175,.08)"
+    article_style = "padding:34px 27px;border-radius:6px;background:#fff;box-shadow:0 2px 14px rgba(31,41,51,.06)" if is_ai_discovery else "padding:28px 24px;border-radius:12px;background:#fff;box-shadow:0 4px 18px rgba(30,64,175,.08)"
+    title_style = "margin:18px 0 7px;color:#1F2933;font-size:25px;line-height:1.38;font-weight:760;letter-spacing:.2px" if is_ai_discovery else "margin:20px 0 8px;color:#102A43;font-size:27px;line-height:1.4"
+    return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)}｜微信排版预览</title></head><body style="margin:0;background:{page_bg};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif"><div style="position:sticky;top:0;background:#102A43;padding:15px;text-align:center;z-index:9"><button id="copy-wechat" {button_attributes}>{button_label}</button><span id="copy-status" style="color:#DBEAFE;margin-left:14px">复制后粘贴到微信公众号编辑器</span></div>{notice}{review_panel}<main style="{main_style}"><section id="cover-preview" style="{preview_style}"><img src="{cover}" alt="横版封面" style="display:block;width:100%;height:auto;border-radius:6px"><h1 style="{title_style}">{html.escape(title)}</h1><p style="margin:0;color:#7A869A;font-size:13px;line-height:1.6">封面和标题不包含在复制区域，请在公众号后台分别填写。</p></section><article id="wechat-content" style="{article_style}">{''.join(blocks)}</article></main><script>async function copyWechat(){{const node=document.getElementById('wechat-content');try{{const htmlBlob=new Blob([node.innerHTML],{{type:'text/html'}});const textBlob=new Blob([node.innerText],{{type:'text/plain'}});await navigator.clipboard.write([new ClipboardItem({{'text/html':htmlBlob,'text/plain':textBlob}})]);document.getElementById('copy-status').textContent='复制成功，请到公众号编辑器粘贴';}}catch(error){{const range=document.createRange();range.selectNodeContents(node);const selection=getSelection();selection.removeAllRanges();selection.addRange(range);document.execCommand('copy');selection.removeAllRanges();document.getElementById('copy-status').textContent='已复制，请粘贴后检查图片';}}}}</script></body></html>'''

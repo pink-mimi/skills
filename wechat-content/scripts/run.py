@@ -82,7 +82,14 @@ def title_options(content_type: str, title: str, count: int) -> list[str]:
     if content_type == "daily-news":
         return [title, f"未完地图｜{title}", f"昨天，这 {count} 件事值得关注", f"昨日坐标：{count} 个正在发生的变化", f"别只看热搜，昨天更值得留意的是这些事"]
     if content_type == "ai-discovery":
-        return [title, f"未完地图｜{title}", f"AI 新发现：这 {count} 个新坐标值得看看", f"本期 AI 观察：{count} 个能打开试试的新工具", f"别只看发布会，先看这 {count} 个 AI 用途"]
+        base = title.replace("：ChatGPT 开始“会听人说话”", "").replace("：AI 对话入口变得更自然", "")
+        return [
+            title,
+            f"未完地图｜{title}",
+            f"{base}，普通人先看这一点",
+            "ChatGPT 语音更新后，最值得看的不是发布会",
+            "走路、练口语、开会前：新的 AI 语音入口能做什么",
+        ]
     return [title, f"未完地图｜{title}", f"本周开源坐标：{count} 个值得收藏的项目", f"GitHub 本周观察：这 {count} 个项目解决了什么", f"从热榜到实用：本周值得打开的 {count} 个项目"]
 
 
@@ -91,6 +98,8 @@ def resolve_cover_title(payload: dict, article_title: str) -> str:
     explicit = str(editorial.get("cover_title") or "").strip()
     if explicit:
         return explicit
+    if payload.get("content_type") == "ai-discovery":
+        return article_title
     if payload.get("content_type") != "daily-news":
         return article_title
     for item in payload.get("items") or []:

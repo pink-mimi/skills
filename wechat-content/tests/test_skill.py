@@ -331,6 +331,44 @@ class WechatContentTests(unittest.TestCase):
             self.assertTrue((out / "images/官方示例-01.png").exists())
             self.assertEqual(manifest["official_images"][0]["image_mode"], "official_verified")
 
+    def test_ai_discovery_official_image_drives_cover_and_reader_titles(self):
+        payload = json.loads((SKILL / "tests/fixtures/ai-discovery-content-package.json").read_text(encoding="utf-8"))
+        payload["items"][0]["name"] = "GPT-Live"
+        payload["items"][0]["use_case"] = "把 ChatGPT 语音升级为可打断、可等待、可边听边说的实时对话入口。"
+        payload["editorial"]["title"] = "AI 新发现：GPT-Live 能帮谁少绕路？"
+        with tempfile.TemporaryDirectory() as temp:
+            official = Path(temp) / "official-demo.png"
+            official.parent.mkdir(parents=True, exist_ok=True)
+            image = Image.new("RGB", (1600, 900), (230, 205, 138))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((760, 0, 1600, 900), fill=(96, 128, 154))
+            draw.ellipse((1030, 205, 1250, 425), fill=(235, 221, 190))
+            image.save(official)
+            payload["items"][0]["official_images"] = [
+                {
+                    "url": "https://openai.com/zh-Hans-CN/index/introducing-gpt-live/",
+                    "source_page": "https://openai.com/zh-Hans-CN/index/introducing-gpt-live/",
+                    "source_path": str(official),
+                    "description": "OpenAI GPT-Live 发布页视频封面",
+                    "usage_status": "approved",
+                    "verification_status": "verified",
+                    "is_official": True,
+                    "source_type": "official_release",
+                }
+            ]
+            source = Path(temp) / "ai-official-cover.json"
+            source.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            out = self.build(source, temp)
+            article = (out / "公众号成稿.md").read_text(encoding="utf-8")
+            titles = (out / "备选标题.txt").read_text(encoding="utf-8")
+            self.assertIn("# GPT-Live 来了：ChatGPT 开始“会听人说话”", article)
+            self.assertNotIn("这 1 个新坐标", titles)
+            self.assertIn("走路、练口语、开会前", titles)
+            with Image.open(out / "images/横版封面.png") as wide:
+                self.assertEqual(wide.size, (900, 383))
+                self.assertLess(max(wide.convert("RGB").getpixel((70, 40))), 195)
+                self.assertGreater(wide.convert("RGB").getpixel((820, 210))[0], 45)
+
     def test_ai_discovery_rejects_third_party_image_as_official(self):
         payload = json.loads((SKILL / "tests/fixtures/ai-discovery-content-package.json").read_text(encoding="utf-8"))
         with tempfile.TemporaryDirectory() as temp:
