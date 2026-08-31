@@ -787,7 +787,7 @@ def render_images(
                         "description": official_image.get("description") or "官方示例图",
                     }
                 )
-            else:
+            elif payload["content_type"] != "ai-discovery":
                 body_card((1200, 675), item, index, payload["content_type"], palette).save(directory / f"AI发现-{index:02d}.png", optimize=True)
         if official_records:
             payload["_official_images"] = official_records
@@ -795,7 +795,7 @@ def render_images(
     if payload["content_type"] == "daily-news":
         return visual.get("image_mode", "weekday_fallback") if visual else "template"
     if payload["content_type"] == "ai-discovery":
-        return "official_verified" if payload.get("_official_images") else "ai_discovery_template"
+        return "official_verified" if payload.get("_official_images") else "ai_discovery_no_official_image"
     return "template_fallback"
 
 
@@ -1196,9 +1196,9 @@ def build_ai_discovery_article(payload: dict):
     platforms = "、".join(text_list(item.get("platforms"), ["以官方说明为准"]))
     supports_chinese = reader_clean_text(item.get("supports_chinese") or "以官方说明为准")
     official_image = ai_official_image_candidate(item)
-    image_label = ai_official_image_label(item, official_image) if official_image else f"{name} 使用场景示意图"
-    image_path = "images/官方示例-01.png" if official_image else "images/AI发现-01.png"
-    image_caption = ai_official_image_caption(item, official_image) if official_image else f"使用场景示意图：围绕 {name} 的典型使用路径绘制，不代表真实产品界面。"
+    image_label = ai_official_image_label(item, official_image) if official_image else ""
+    image_path = "images/官方示例-01.png" if official_image else ""
+    image_caption = ai_official_image_caption(item, official_image) if official_image else ""
     first_scene = scenarios[0] if scenarios else "把一个具体问题交给 AI 帮忙拆开"
     audience_text = "、".join(audience[:3])
     scenario_text = "；".join(scenarios)
@@ -1219,10 +1219,15 @@ def build_ai_discovery_article(payload: dict):
         f"- 怎么开始：先确认 {platforms} 入口、账号地区和设备权限，再拿一个低风险小任务试起。",
         f"- 先注意什么：免费额度、付费档位、地区支持和隐私规则变化都很快，长期使用前以官方页面为准。",
         "",
-        f"![{image_label}]({image_path})",
-        "",
-        f"图注：{image_caption}",
-        "",
+    ]
+    if official_image:
+        lines += [
+            f"![{image_label}]({image_path})",
+            "",
+            f"图注：{image_caption}",
+            "",
+        ]
+    lines += [
         f"## 一、{name} 是什么",
         "",
         f"公开资料显示，{name} 不是简单多一个聊天按钮，而是把 AI 对话放进“{use_case}”这类更顺手的路径里。它想解决的不是让用户多学一套操作，而是让问题可以更自然地被说出来、接住，再继续往下处理。",

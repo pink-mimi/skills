@@ -53,6 +53,6 @@
 - 横版封面。
 - 方形封面。
 - 左长右方合并封面。
-- 正文配图：优先官方授权截图；没有授权图时使用结构化示意图或本地模板图，并标注为“使用场景示意图”，不得冒充真实 UI。
-- 只有 `official_images` 中 `is_official: true`、`usage_status` 为 `approved` 或 `verified`、`verification_status` 为 `verified` 或 `approved`，且存在本地 `source_path`/`cache_path` 的图片，才能在正文标注为“官方示例图”。
+- 正文配图：优先官方授权截图；没有可追溯官方图时可以不放正文图，避免用通用模板硬凑。确需示意图时必须和本期对象强相关，并标注为“使用场景示意图”，不得冒充真实 UI。
+- 只有 `official_images` 中 `is_official: true`、`usage_status` 为 `approved` 或 `verified`、`verification_status` 为 `verified` 或 `approved`，且存在本地 `source_path`/`cache_path` 的图片，才能在正文使用并标注为官方来源图片。
 - 第三方介绍页图片不得输出为“官方示例图”；只能作为写法参考或补充资料来源。
